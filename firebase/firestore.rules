@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'daakukwaku7@gmail.com';
+    }
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isActiveCampaign() {
+      return resource.data.status == 'active';
+    }
+
+    function ownerCanUpdateCampaign() {
+      return request.auth != null
+        && resource.data.ownerId == request.auth.uid
+        && resource.data.status in ['payment_pending', 'pending_review'];
+    }
+
+    function ownerCanRequestExtension() {
+      return request.auth != null
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['extensionPending', 'updatedAt']);
+    }
+
+    function onlyAnalyticsFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['views', 'shares', 'clicks', 'followerCount', 'commentCount', 'updatedAt']);
+    }
+
+    function isValidAnalyticsDoc(id) {
+      return request.resource.data.campaignId == id
+        && request.resource.data.keys().hasAll(['campaignId', 'updatedAt']);
+    }
+
+    function isLikeOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.role == (request.auth.token.email == 'daakukwaku7@gmail.com' ? 'admin' : 'user');
+      allow update: if isAdmin()
+        || (isOwner(userId)
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid', 'verified']));
+      allow delete: if isAdmin();
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if resource.data.status == 'active'
+        || (request.auth != null && resource.data.ownerId == request.auth.uid)
+        || isAdmin();
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'payment_pending';
+      allow update: if isAdmin()
+        || ownerCanUpdateCampaign()
+        || ownerCanRequestExtension()
+        || (isActiveCampaign() && onlyAnalyticsFieldsChanged());
+      allow delete: if isAdmin();
+    }
+
+    match /analytics/{campaignId} {
+      allow read: if true;
+      allow create: if isValidAnalyticsDoc(campaignId);
+      allow update: if resource.data.campaignId == campaignId;
+    }
+
+    match /followers/{followId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500;
+      allow update: if isAdmin()
+        || isLikeOnly()
+        || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin()
+        || (request.auth != null && resource.data.userId == request.auth.uid);
+    }
+
+    match /reports/{reportId} {
+      allow create: if request.auth != null
+        && request.resource.data.reporterId == request.auth.uid;
+      allow read, update: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdmin()
+        || (request.auth != null && resource.data.userId == request.auth.uid);
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin()
+        || (request.auth != null
+            && resource.data.userId == request.auth.uid
+            && resource.data.paymentStatus in ['pending', 'pending_review']);
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if isAdmin()
+        || (request.auth != null && request.resource.data.userId == request.auth.uid);
+      allow update: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+  }
+}

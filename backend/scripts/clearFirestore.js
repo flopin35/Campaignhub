@@ -1,5 +1,5 @@
 /**
- * Clear Firestore collections for fresh testing.
+ * Clear Firestore collections (development maintenance only).
  * Run: node scripts/clearFirestore.js
  *
  * Requires FIREBASE_* credentials in backend/.env

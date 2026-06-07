@@ -6,17 +6,12 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach Firebase ID token or legacy admin JWT
+// Attach Firebase ID token to API requests
 api.interceptors.request.use(async (config) => {
   const firebaseUser = auth.currentUser;
   if (firebaseUser) {
     const token = await firebaseUser.getIdToken();
     config.headers.Authorization = `Bearer ${token}`;
-  } else {
-    const legacyToken = localStorage.getItem('adminToken');
-    if (legacyToken) {
-      config.headers.Authorization = `Bearer ${legacyToken}`;
-    }
   }
   return config;
 });

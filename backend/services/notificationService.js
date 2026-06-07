@@ -1,26 +1,74 @@
-/**
- * Notification service — MVP stub for future email/push integrations.
- * Logs notifications to console for now.
- */
+import admin, { getDb, isFirebaseConfigured } from '../config/firebaseConfig.js';
+
+async function createFirestoreNotification({ userId, message, type, campaignId = null }) {
+  if (!isFirebaseConfigured() || !userId) {
+    return { sent: false, type };
+  }
+
+  const db = getDb();
+  await db.collection('notifications').add({
+    userId,
+    message,
+    type,
+    campaignId,
+    read: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { sent: true, type };
+}
+
+async function resolveAdminUserId() {
+  if (!isFirebaseConfigured()) return null;
+
+  const adminEmail = (process.env.ADMIN_EMAIL || 'daakukwaku7@gmail.com').toLowerCase();
+  const db = getDb();
+  const snapshot = await db
+    .collection('users')
+    .where('email', '==', adminEmail)
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) return null;
+  return snapshot.docs[0].id;
+}
 
 export async function notifyCampaignApproved(campaign) {
-  console.log(`[NOTIFY] Campaign approved: "${campaign.title}" (${campaign.slug})`);
-  console.log(`  → Contact: ${campaign.contactEmail}`);
-  return { sent: true, type: 'approval' };
+  return createFirestoreNotification({
+    userId: campaign.ownerId,
+    message: `Your campaign "${campaign.title}" has been approved and is now live.`,
+    type: 'campaign_approved',
+    campaignId: campaign.id,
+  });
 }
 
 export async function notifyCampaignRejected(campaign, reason = '') {
-  console.log(`[NOTIFY] Campaign rejected: "${campaign.title}"`);
-  if (reason) console.log(`  → Reason: ${reason}`);
-  return { sent: true, type: 'rejection' };
+  const detail = reason ? ` Reason: ${reason}` : '';
+  return createFirestoreNotification({
+    userId: campaign.ownerId,
+    message: `Your campaign "${campaign.title}" was not approved.${detail}`,
+    type: 'campaign_rejected',
+    campaignId: campaign.id,
+  });
 }
 
 export async function notifyCampaignExpiring(campaign, daysLeft) {
-  console.log(`[NOTIFY] Campaign expiring in ${daysLeft} day(s): "${campaign.title}"`);
-  return { sent: true, type: 'expiring' };
+  return createFirestoreNotification({
+    userId: campaign.ownerId,
+    message: `Your campaign "${campaign.title}" expires in ${daysLeft} day(s).`,
+    type: 'campaign_expiring',
+    campaignId: campaign.id,
+  });
 }
 
 export async function notifyNewSubmission(campaign) {
-  console.log(`[NOTIFY] New campaign submission: "${campaign.title}" — pending review`);
-  return { sent: true, type: 'new_submission' };
+  const adminUserId = await resolveAdminUserId();
+  if (!adminUserId) return { sent: false, type: 'new_submission' };
+
+  return createFirestoreNotification({
+    userId: adminUserId,
+    message: `New campaign submission: "${campaign.title}" — pending review.`,
+    type: 'new_submission',
+    campaignId: campaign.id,
+  });
 }

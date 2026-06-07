@@ -11,7 +11,13 @@ export const STORAGE_FOLDERS = {
   GALLERY: 'campaigns/gallery',
   LOGOS: 'campaigns/logos',
   PAYMENTS: 'payments/screenshots',
+  AVATARS: 'users/avatars',
 };
+
+const COMPRESS_THRESHOLD = 1024 * 1024; // 1MB
+const MAX_DIMENSION = 1920;
+const UPLOAD_COOLDOWN_MS = 2000;
+let lastUploadAt = 0;
 
 export class StorageUploadError extends Error {
   constructor(message, code = 'storage/unknown') {
@@ -75,9 +81,52 @@ export function validateImageFile(file) {
   }
 }
 
+/**
+ * Compress large images client-side before upload (keeps quality reasonable).
+ */
+export async function compressImageIfNeeded(file) {
+  if (!file || file.size <= COMPRESS_THRESHOLD) return file;
+  if (!file.type?.startsWith('image/')) return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('Compression failed'))),
+        file.type === 'image/png' ? 'image/png' : 'image/jpeg',
+        0.85
+      );
+    });
+
+    return new File([blob], file.name, { type: blob.type });
+  } catch {
+    return file;
+  }
+}
+
+function enforceUploadCooldown() {
+  const now = Date.now();
+  if (now - lastUploadAt < UPLOAD_COOLDOWN_MS) {
+    throw new StorageUploadError('Please wait a moment before uploading again.', 'storage/rate-limit');
+  }
+  lastUploadAt = now;
+}
+
 function mapStorageError(err) {
   const code = err?.code || 'storage/unknown';
   const messages = {
+    'storage/unverified': 'Verify your email before uploading files.',
     'storage/unauthorized': 'Upload denied. Please sign in again and retry.',
     'storage/unauthenticated': 'You must be signed in to upload files.',
     'storage/canceled': 'Upload was canceled.',
@@ -121,14 +170,25 @@ export async function uploadToStorage(file, folder, options = {}) {
     );
   }
 
-  validateImageFile(file);
+  if (!auth.currentUser.emailVerified) {
+    throw new StorageUploadError(
+      'Please verify your email before uploading files. Check your inbox for the verification link.',
+      'storage/unverified'
+    );
+  }
 
-  const filename = buildFilename(file, label);
+  validateImageFile(file);
+  enforceUploadCooldown();
+
+  const prepared = await compressImageIfNeeded(file);
+  validateImageFile(prepared);
+
+  const filename = buildFilename(prepared, label);
   const path = `${folder}/${filename}`;
   const storageRef = ref(storage, path);
 
-  const uploadTask = uploadBytesResumable(storageRef, file, {
-    contentType: resolveContentType(file),
+  const uploadTask = uploadBytesResumable(storageRef, prepared, {
+    contentType: resolveContentType(prepared),
   });
 
   return new Promise((resolve, reject) => {
@@ -224,4 +284,9 @@ export async function uploadGalleryImages(files, onProgress) {
 
 export async function uploadPaymentScreenshot(file, onProgress) {
   return uploadToStorage(file, STORAGE_FOLDERS.PAYMENTS, { onProgress, label: 'screenshot' });
+}
+
+export async function uploadAvatar(file, userId, onProgress) {
+  if (!userId) throw new StorageUploadError('User ID required for avatar upload.', 'storage/invalid-file');
+  return uploadToStorage(file, `${STORAGE_FOLDERS.AVATARS}/${userId}`, { onProgress, label: 'avatar' });
 }

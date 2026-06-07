@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { signUpWithEmail } from '../services/authService';
+import { getAuthErrorMessage } from '../utils/authErrors';
+import { useToast } from '../context/ToastContext';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 
 export default function Signup() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,16 +29,24 @@ export default function Signup() {
     setLoading(true);
     try {
       await signUpWithEmail(form.name, form.email, form.password);
-      navigate('/dashboard', { replace: true });
+      toast('Account created! Check your email to verify.', 'success');
+      navigate('/verify-email', { replace: true });
     } catch (err) {
-      setError(getAuthErrorMessage(err.code) || err.message);
+      const msg = getAuthErrorMessage(err.code) || err.message;
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSuccess = () => {
-    navigate('/dashboard', { replace: true });
+  const handleGoogleSuccess = ({ user }) => {
+    if (user?.emailVerified) {
+      navigate('/dashboard', { replace: true });
+      toast('Welcome to CampaignHub!', 'success');
+    } else {
+      navigate('/verify-email', { replace: true });
+    }
   };
 
   return (
@@ -80,6 +91,7 @@ export default function Signup() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
+                autoComplete="name"
                 placeholder="John Doe"
                 className="input-field"
               />
@@ -91,6 +103,7 @@ export default function Signup() {
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
+                autoComplete="email"
                 placeholder="you@example.com"
                 className="input-field"
               />
@@ -102,6 +115,7 @@ export default function Signup() {
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
+                autoComplete="new-password"
                 placeholder="Min. 6 characters"
                 className="input-field"
               />
@@ -113,14 +127,19 @@ export default function Signup() {
                 value={form.confirm}
                 onChange={(e) => setForm({ ...form, confirm: e.target.value })}
                 required
+                autoComplete="new-password"
                 placeholder="••••••••"
                 className="input-field"
               />
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
-              {loading ? 'Creating account...' : 'Create Account'}
+              {loading ? 'Creating account…' : 'Create Account'}
             </button>
           </form>
+
+          <p className="text-xs text-gray-500 text-center">
+            By signing up, you&apos;ll receive a verification email before uploading campaigns.
+          </p>
 
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
@@ -132,13 +151,4 @@ export default function Signup() {
       </motion.div>
     </div>
   );
-}
-
-function getAuthErrorMessage(code) {
-  const messages = {
-    'auth/email-already-in-use': 'An account with this email already exists.',
-    'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
-    'auth/invalid-email': 'Invalid email address.',
-  };
-  return messages[code];
 }

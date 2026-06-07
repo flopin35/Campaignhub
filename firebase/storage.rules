@@ -1,11 +1,43 @@
 rules_version = '2';
 
-// MVP rules — authenticated users can read/write.
-// TODO: restrict uploads by ownership and validate file metadata before production.
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function isVerifiedUser() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isImage() {
+      return request.resource != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+    }
+
+    // Campaign assets — public read, verified users only write
+    match /campaigns/{allPaths=**} {
+      allow read: if true;
+      allow write: if isVerifiedUser() && isImage();
+    }
+
+    match /payments/screenshots/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if isVerifiedUser() && isImage();
+    }
+
+    match /payments/proofs/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if isVerifiedUser() && isImage();
+    }
+
+    match /users/avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isVerifiedUser()
+        && request.auth.uid == userId
+        && isImage();
+    }
+
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

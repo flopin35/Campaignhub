@@ -8,8 +8,7 @@ let storage = null;
 let initialized = false;
 
 /**
- * Initialize Firebase Admin SDK.
- * Falls back to mock mode when credentials are not configured (dev-friendly).
+ * Initialize Firebase Admin SDK. Requires service account credentials.
  */
 export function initFirebase() {
   if (initialized) return { db, storage };
@@ -30,10 +29,15 @@ export function initFirebase() {
     db = admin.firestore();
     storage = admin.storage();
     initialized = true;
-    console.log('Firebase initialized successfully');
+    console.log('Firebase Admin initialized successfully');
   } else {
-    console.warn('Firebase credentials not configured — running in mock mode');
     initialized = true;
+    console.error(
+      'Firebase Admin credentials missing. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.'
+    );
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Firebase Admin credentials are required in production');
+    }
   }
 
   return { db, storage };
@@ -41,15 +45,22 @@ export function initFirebase() {
 
 export function getDb() {
   if (!initialized) initFirebase();
+  if (!db) {
+    throw new Error('Firebase Admin is not configured');
+  }
   return db;
 }
 
 export function getStorage() {
   if (!initialized) initFirebase();
+  if (!storage) {
+    throw new Error('Firebase Admin is not configured');
+  }
   return storage;
 }
 
 export function isFirebaseConfigured() {
+  if (!initialized) initFirebase();
   return db !== null;
 }
 

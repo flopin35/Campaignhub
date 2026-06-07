@@ -2,11 +2,14 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { loginWithEmail } from '../services/authService';
+import { getAuthErrorMessage } from '../utils/authErrors';
+import { useToast } from '../context/ToastContext';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
   const from = location.state?.from?.pathname || '/dashboard';
 
   const [form, setForm] = useState({ email: '', password: '' });
@@ -18,16 +21,28 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      await loginWithEmail(form.email, form.password);
-      navigate(from, { replace: true });
+      const { user } = await loginWithEmail(form.email, form.password);
+      if (!user.emailVerified) {
+        navigate('/verify-email', { state: { from: location.state?.from }, replace: true });
+        toast('Please verify your email to access your dashboard.', 'warning');
+      } else {
+        navigate(from, { replace: true });
+        toast('Welcome back!', 'success');
+      }
     } catch (err) {
-      setError(getAuthErrorMessage(err.code) || err.message);
+      const msg = getAuthErrorMessage(err.code) || err.message;
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSuccess = () => {
+  const handleGoogleSuccess = ({ user }) => {
+    if (!user?.emailVerified) {
+      navigate('/verify-email', { replace: true });
+      return;
+    }
     navigate(from, { replace: true });
   };
 
@@ -73,28 +88,35 @@ export default function Login() {
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
+                autoComplete="email"
                 placeholder="you@example.com"
                 className="input-field"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-300">Password</label>
+                <Link to="/forgot-password" className="text-xs text-brand-400 hover:text-brand-300">
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required
+                autoComplete="current-password"
                 placeholder="••••••••"
                 className="input-field"
               />
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
 
           <p className="text-center text-sm text-gray-500">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link to="/signup" className="text-brand-400 hover:text-brand-300 transition-colors">
               Sign up
             </Link>
@@ -103,15 +125,4 @@ export default function Login() {
       </motion.div>
     </div>
   );
-}
-
-function getAuthErrorMessage(code) {
-  const messages = {
-    'auth/invalid-credential': 'Invalid email or password.',
-    'auth/user-not-found': 'No account found with this email.',
-    'auth/wrong-password': 'Incorrect password.',
-    'auth/too-many-requests': 'Too many attempts. Try again later.',
-    'auth/invalid-email': 'Invalid email address.',
-  };
-  return messages[code];
 }

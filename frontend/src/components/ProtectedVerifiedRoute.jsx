@@ -1,11 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import AdminAccessDenied from './AdminAccessDenied';
 import AuthLoading from './AuthLoading';
 
-/** Requires authenticated user (verified or not). */
-export default function ProtectedRoute({ children, requireAdmin = false }) {
-  const { user, loading, isAdmin } = useAuth();
+/**
+ * Requires authenticated user with verified email.
+ * Unverified users are redirected to /verify-email.
+ */
+export default function ProtectedVerifiedRoute({ children }) {
+  const { user, loading, isVerified } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -16,8 +18,8 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requireAdmin && !isAdmin) {
-    return <AdminAccessDenied />;
+  if (!isVerified) {
+    return <Navigate to="/verify-email" state={{ from: location }} replace />;
   }
 
   return children;

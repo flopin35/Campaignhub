@@ -1,7 +1,7 @@
 import axios from 'axios';
 import api from './api';
 
-const AI_DIRECT_URL = import.meta.env.VITE_AI_SERVICE_URL || 'http://localhost:8000';
+const AI_DIRECT_URL = import.meta.env.VITE_AI_SERVICE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
 /** Extract reply text from backend or AI service response shapes */
 export function parseAiReply(payload) {
@@ -48,7 +48,7 @@ export const aiService = {
       };
     } catch (err) {
       // Dev fallback: call AI service directly if Express backend is down
-      if (import.meta.env.DEV) {
+      if (import.meta.env.DEV && AI_DIRECT_URL) {
         try {
           return await callAiDirect(message, context, type);
         } catch {

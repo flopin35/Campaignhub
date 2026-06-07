@@ -82,7 +82,11 @@ export async function submitCampaign(req, res) {
     });
   } catch (error) {
     console.error('Submit campaign error:', error);
-    res.status(500).json({ success: false, message: 'Failed to submit campaign' });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to submit campaign',
+    });
   }
 }
 

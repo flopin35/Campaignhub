@@ -3,54 +3,15 @@ import { getDb, getStorage, isFirebaseConfigured } from '../config/firebaseConfi
 
 const COLLECTION = 'campaigns';
 
-// In-memory mock store for development without Firebase credentials
-export const mockCampaigns = [
-  {
-    id: '1',
-    title: 'Marine Security Awareness',
-    slug: 'marine-security-awareness',
-    description: 'Raising awareness about marine security and coastal safety for communities worldwide.',
-    contactEmail: 'contact@marineaware.org',
-    contactPhone: '+1 555-0100',
-    bannerUrl: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80',
-    status: 'active',
-    durationDays: 30,
-    startDate: new Date(Date.now() - 5 * 86400000).toISOString(),
-    expiryDate: new Date(Date.now() + 25 * 86400000).toISOString(),
-    createdAt: new Date(Date.now() - 5 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    title: 'Nelis Foundation Drive',
-    slug: 'nelis-foundation-drive',
-    description: 'Community fundraising campaign supporting education initiatives in underserved regions.',
-    contactEmail: 'info@nelisfoundation.org',
-    contactPhone: '+1 555-0200',
-    bannerUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&q=80',
-    status: 'active',
-    durationDays: 14,
-    startDate: new Date(Date.now() - 3 * 86400000).toISOString(),
-    expiryDate: new Date(Date.now() + 11 * 86400000).toISOString(),
-    createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    title: 'Green Earth Initiative',
-    slug: 'green-earth-initiative',
-    description: 'Promoting sustainable practices and environmental conservation across urban communities.',
-    contactEmail: 'hello@greenearth.org',
-    contactPhone: '+1 555-0300',
-    bannerUrl: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?w=800&q=80',
-    status: 'pending',
-    durationDays: 21,
-    startDate: null,
-    expiryDate: null,
-    createdAt: new Date(Date.now() - 1 * 86400000).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+function assertFirebaseConfigured() {
+  if (!isFirebaseConfigured()) {
+    const err = new Error(
+      'Firebase Admin is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.'
+    );
+    err.statusCode = 503;
+    throw err;
+  }
+}
 
 function applyExpiry(campaign) {
   if (campaign.status === 'active' && campaign.expiryDate) {
@@ -62,19 +23,7 @@ function applyExpiry(campaign) {
 }
 
 export async function getAllCampaigns(filters = {}) {
-  if (!isFirebaseConfigured()) {
-    let results = mockCampaigns.map(applyExpiry);
-    if (filters.status) results = results.filter((c) => c.status === filters.status);
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      results = results.filter(
-        (c) =>
-          c.title.toLowerCase().includes(q) ||
-          c.description.toLowerCase().includes(q)
-      );
-    }
-    return results;
-  }
+  assertFirebaseConfigured();
 
   const db = getDb();
   let query = db.collection(COLLECTION);
@@ -99,10 +48,7 @@ export async function getAllCampaigns(filters = {}) {
 }
 
 export async function getCampaignBySlug(slug) {
-  if (!isFirebaseConfigured()) {
-    const campaign = mockCampaigns.find((c) => c.slug === slug);
-    return campaign ? applyExpiry(campaign) : null;
-  }
+  assertFirebaseConfigured();
 
   const db = getDb();
   const snapshot = await db.collection(COLLECTION).where('slug', '==', slug).limit(1).get();
@@ -112,10 +58,7 @@ export async function getCampaignBySlug(slug) {
 }
 
 export async function getCampaignById(id) {
-  if (!isFirebaseConfigured()) {
-    const campaign = mockCampaigns.find((c) => c.id === id);
-    return campaign ? applyExpiry(campaign) : null;
-  }
+  assertFirebaseConfigured();
 
   const db = getDb();
   const doc = await db.collection(COLLECTION).doc(id).get();
@@ -124,6 +67,8 @@ export async function getCampaignById(id) {
 }
 
 export async function createCampaign(data) {
+  assertFirebaseConfigured();
+
   const id = uuidv4();
   const now = new Date().toISOString();
   const campaign = {
@@ -136,26 +81,16 @@ export async function createCampaign(data) {
     updatedAt: now,
   };
 
-  if (!isFirebaseConfigured()) {
-    mockCampaigns.unshift(campaign);
-    return campaign;
-  }
-
   const db = getDb();
   await db.collection(COLLECTION).doc(id).set(campaign);
   return campaign;
 }
 
 export async function updateCampaign(id, updates) {
+  assertFirebaseConfigured();
+
   const now = new Date().toISOString();
   const payload = { ...updates, updatedAt: now };
-
-  if (!isFirebaseConfigured()) {
-    const idx = mockCampaigns.findIndex((c) => c.id === id);
-    if (idx === -1) return null;
-    mockCampaigns[idx] = { ...mockCampaigns[idx], ...payload };
-    return mockCampaigns[idx];
-  }
 
   const db = getDb();
   await db.collection(COLLECTION).doc(id).update(payload);
@@ -163,12 +98,7 @@ export async function updateCampaign(id, updates) {
 }
 
 export async function deleteCampaign(id) {
-  if (!isFirebaseConfigured()) {
-    const idx = mockCampaigns.findIndex((c) => c.id === id);
-    if (idx === -1) return false;
-    mockCampaigns.splice(idx, 1);
-    return true;
-  }
+  assertFirebaseConfigured();
 
   const db = getDb();
   await db.collection(COLLECTION).doc(id).delete();
@@ -176,10 +106,7 @@ export async function deleteCampaign(id) {
 }
 
 export async function uploadBanner(file) {
-  if (!isFirebaseConfigured()) {
-    // Return a placeholder URL in mock mode
-    return `https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&q=80&mock=${Date.now()}`;
-  }
+  assertFirebaseConfigured();
 
   const storage = getStorage();
   const bucket = storage.bucket();
@@ -195,9 +122,7 @@ export async function uploadBanner(file) {
 }
 
 export async function slugExists(slug) {
-  if (!isFirebaseConfigured()) {
-    return mockCampaigns.some((c) => c.slug === slug);
-  }
+  assertFirebaseConfigured();
 
   const db = getDb();
   const snapshot = await db.collection(COLLECTION).where('slug', '==', slug).limit(1).get();

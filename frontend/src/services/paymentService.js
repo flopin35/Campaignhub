@@ -49,7 +49,7 @@ export async function submitPaymentProof({ paymentId, campaignId, userId, screen
     await createNotification({
       userId,
       message: 'Payment proof submitted. Awaiting admin verification.',
-      type: 'payment_approved',
+      type: 'payment_pending',
       campaignId,
     });
   } catch (err) {
@@ -78,6 +78,7 @@ export async function verifyPaymentAndActivate({ paymentId, campaignId, campaign
     verified: true,
     startDate: Timestamp.fromDate(start),
     endDate: Timestamp.fromDate(end),
+    expiresAt: Timestamp.fromDate(end),
     updatedAt: serverTimestamp(),
   });
 

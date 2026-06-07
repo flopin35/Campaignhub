@@ -1,22 +1,17 @@
 import { generateSlug, appendSlugSuffix } from '../utils/slugGenerator.js';
 import { getDb, isFirebaseConfigured } from '../config/firebaseConfig.js';
-import { mockCampaigns } from './firebaseService.js';
 
 const COLLECTION = 'campaigns';
 
 /**
  * Resolve a unique slug for a campaign title.
- * Checks Firestore (or mock store) for collisions.
  */
 export async function resolveUniqueSlug(title) {
-  const baseSlug = generateSlug(title);
-
   if (!isFirebaseConfigured()) {
-    const existing = mockCampaigns.filter((c) => c.slug.startsWith(baseSlug));
-    if (existing.length === 0) return baseSlug;
-    return appendSlugSuffix(baseSlug, existing.length);
+    throw new Error('Firebase Admin is not configured — cannot generate slug');
   }
 
+  const baseSlug = generateSlug(title);
   const db = getDb();
   const snapshot = await db
     .collection(COLLECTION)

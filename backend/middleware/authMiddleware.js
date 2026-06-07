@@ -4,14 +4,14 @@ import { verifyJwt } from '../controllers/authController.js';
 /**
  * Verify Firebase ID token and check admin role in Firestore.
  */
-const ADMIN_EMAIL = 'daakukwaku7@gmail.com';
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'daakukwaku7@gmail.com').toLowerCase();
 
 async function verifyFirebaseAdmin(token) {
   if (!isFirebaseConfigured()) return null;
 
   try {
     const decoded = await admin.auth().verifyIdToken(token);
-    if (decoded.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    if (decoded.email?.toLowerCase() === ADMIN_EMAIL) {
       return { uid: decoded.uid, email: decoded.email, role: 'admin', source: 'firebase' };
     }
   } catch {

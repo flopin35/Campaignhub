@@ -5,6 +5,7 @@ import {
   getUserProfile,
   logout as authLogout,
   refreshAuthUser,
+  handleGoogleRedirectResult,
 } from '../services/authService';
 
 const AuthContext = createContext(null);
@@ -13,6 +14,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [redirectProcessing, setRedirectProcessing] = useState(true);
 
   const loadProfile = useCallback(async (firebaseUser) => {
     if (!firebaseUser) {
@@ -24,6 +26,18 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        await handleGoogleRedirectResult();
+      } catch (err) {
+        console.error('Google redirect sign-in failed:', err.message);
+      } finally {
+        if (mounted) setRedirectProcessing(false);
+      }
+    })();
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
@@ -31,10 +45,33 @@ export function AuthProvider({ children }) {
       } else {
         setUserProfile(null);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
-    return unsubscribe;
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, [loadProfile]);
+
+  /** Auto-refresh verification status while user is pending verification */
+  useEffect(() => {
+    if (!user || user.emailVerified) return undefined;
+
+    const interval = setInterval(async () => {
+      try {
+        const updated = await refreshAuthUser();
+        if (updated?.emailVerified) {
+          setUser(auth.currentUser);
+          await loadProfile(updated);
+        }
+      } catch {
+        /* silent — user may retry manually */
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [user?.uid, user?.emailVerified, loadProfile]);
 
   const logout = async () => {
     await authLogout();
@@ -54,7 +91,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     userProfile,
-    loading,
+    loading: loading || redirectProcessing,
     isAuthenticated: !!user,
     isAdmin: checkIsAdmin(user, userProfile),
     isVerified: user?.emailVerified ?? false,

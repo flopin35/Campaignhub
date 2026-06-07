@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/auth';
-import { normalizeCampaign, isCampaignVisible } from '../utils/campaignHelpers';
+import { normalizeCampaign, isCampaignVisible, sortCampaignsForDisplay } from '../utils/campaignHelpers';
 import { expireOverdueCampaigns } from '../services/campaignFirestoreService';
+import { expireCampaignBoosts } from '../services/boostService';
 
 /**
  * Real-time Firestore listener for campaigns.
@@ -26,7 +27,8 @@ export function useCampaigns(options = {}) {
     const q = query(collection(db, 'campaigns'), ...constraints);
 
     const process = (snap) => {
-      const data = snap.docs.map(normalizeCampaign).filter(isCampaignVisible);
+      const raw = snap.docs.map(normalizeCampaign);
+      const data = sortCampaignsForDisplay(raw.filter(isCampaignVisible));
       setCampaigns(data);
       setLoading(false);
     };
@@ -75,6 +77,7 @@ export function useAdminCampaigns(statusFilter = '') {
       async (snap) => {
         let data = snap.docs.map(normalizeCampaign);
         await expireOverdueCampaigns(data);
+        await expireCampaignBoosts(data);
 
         const all = snap.docs.map(normalizeCampaign);
 
@@ -85,6 +88,9 @@ export function useAdminCampaigns(statusFilter = '') {
           }
           if (statusFilter === 'expired') {
             return all.filter((c) => c.status === 'expired' || c.isExpired);
+          }
+          if (statusFilter === 'disabled') {
+            return all.filter((c) => c.disabled || c.status === 'disabled');
           }
           return all.filter((c) => c.status === statusFilter);
         })();

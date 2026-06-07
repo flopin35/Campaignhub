@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { formatCountdown, getStatusBadgeClass } from '../utils/helpers';
+import { getStatusLabel } from '../utils/campaignHelpers';
 import VerificationBadge from './VerificationBadge';
+import BoostBadge from './BoostBadge';
 import QuickShareModal, { CardShareActions } from './QuickShareModal';
 import { Flame } from './icons/AppIcons';
 
@@ -43,8 +45,14 @@ export default function CampaignCard({ campaign, index = 0, showViews = true, sh
           <div className="p-5">
             <div className="flex items-center justify-between mb-2 gap-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={getStatusBadgeClass(campaign.status)}>{campaign.status}</span>
+                <span className={getStatusBadgeClass(campaign.status)}>{getStatusLabel(campaign.status)}</span>
                 <VerificationBadge verified={campaign.verified} />
+                {campaign.paymentVerified && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                    Verified Payment
+                  </span>
+                )}
+                <BoostBadge campaign={campaign} showTimer={false} />
                 {campaign.featured && <span className="badge-active text-[10px]">featured</span>}
                 {campaign.category && <span className="text-[10px] text-gray-500">{campaign.category}</span>}
                 {campaign.packageName && <span className="text-[10px] text-brand-400/80">{campaign.packageName}</span>}

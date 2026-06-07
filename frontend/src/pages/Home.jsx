@@ -6,14 +6,33 @@ import HowItWorks from '../components/HowItWorks';
 import CampaignCard from '../components/CampaignCard';
 import CampaignSkeleton from '../components/CampaignSkeleton';
 import EmptyState from '../components/EmptyState';
+import FeaturedBanner from '../components/FeaturedBanner';
+import SpotlightCarousel from '../components/SpotlightCarousel';
+import BoostedHero from '../components/BoostedHero';
 import { useCampaigns } from '../hooks/useCampaigns';
+import { useMemo } from 'react';
 
 export default function Home() {
   const { campaigns: liveCampaigns, loading } = useCampaigns({ status: 'active', sort: 'newest' });
 
+  const featuredCampaign = useMemo(
+    () => liveCampaigns.find((c) => c.featured) || liveCampaigns[0] || null,
+    [liveCampaigns]
+  );
+
   return (
     <div className="pb-4">
       <HeroSection campaignCount={liveCampaigns.length} />
+
+      {!loading && featuredCampaign && (
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 mb-4">
+          <FeaturedBanner campaign={featuredCampaign} />
+        </section>
+      )}
+
+      <BoostedHero campaigns={liveCampaigns} loading={loading} />
+      <SpotlightCarousel campaigns={liveCampaigns} />
+
       <FeatureSection />
       <HowItWorks />
 

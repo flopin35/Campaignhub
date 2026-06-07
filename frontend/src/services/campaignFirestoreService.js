@@ -18,6 +18,7 @@ import { db } from '../firebase/auth';
 import { generateSlug, appendSlugSuffix } from '../utils/slugGenerator';
 import { normalizeCampaign, addDays, toDate } from '../utils/campaignHelpers';
 import { uploadBanner, uploadGalleryImages, uploadLogo } from './storageService';
+import { auth } from '../firebase/auth';
 
 const CAMPAIGNS = 'campaigns';
 
@@ -65,6 +66,9 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   if (!bannerFile) throw new Error('Banner image is required');
   if (!pkg) throw new Error('Please select a package');
   if (!ownerId) throw new Error('You must be signed in to create a campaign');
+  if (!auth.currentUser?.emailVerified) {
+    throw new Error('Please verify your email before launching a campaign.');
+  }
 
   let bannerImage;
   let logoUrl = '';
@@ -130,6 +134,8 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
     priorityLevel: pkg.priorityLevel,
     featured: pkg.featured || false,
     spotlight: pkg.spotlight || false,
+    packageFeatured: pkg.featured || false,
+    packageSpotlight: pkg.spotlight || false,
     verified: false,
     paymentVerified: false,
     views: 0,
@@ -259,6 +265,13 @@ export async function toggleFeatured(campaignId, featured) {
 export async function toggleSpotlight(campaignId, spotlight) {
   await updateDoc(doc(db, CAMPAIGNS, campaignId), {
     spotlight,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function toggleCampaignDisabled(campaignId, disabled) {
+  await updateDoc(doc(db, CAMPAIGNS, campaignId), {
+    disabled,
     updatedAt: serverTimestamp(),
   });
 }

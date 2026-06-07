@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { formatCountdown } from '../utils/helpers';
+import BoostBadge from './BoostBadge';
 
 export default function FeaturedBanner({ campaign }) {
   if (!campaign) return null;
@@ -22,6 +23,7 @@ export default function FeaturedBanner({ campaign }) {
 
       <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
         <span className="badge-active mb-3">Featured</span>
+        <BoostBadge campaign={campaign} className="mb-2 mr-2" />
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{campaign.title}</h2>
         {campaign.ownerName && <p className="text-brand-400 text-sm mb-2">by {campaign.ownerName}</p>}
         <p className="text-gray-300 text-sm sm:text-base max-w-xl mb-4 line-clamp-2">{campaign.description}</p>

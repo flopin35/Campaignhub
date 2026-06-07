@@ -1,4 +1,3 @@
-import { getAllCampaigns, updateCampaign } from './firebaseService.js';
 import { isFirebaseConfigured, getDb } from '../config/firebaseConfig.js';
 
 const COLLECTION = 'campaigns';
@@ -8,24 +7,12 @@ const COLLECTION = 'campaigns';
  * Runs on server start and on a periodic interval.
  */
 export async function expireCampaigns() {
+  if (!isFirebaseConfigured()) {
+    return 0;
+  }
+
   const now = new Date();
   let expiredCount = 0;
-
-  if (!isFirebaseConfigured()) {
-    const { mockCampaigns } = await import('./firebaseService.js');
-    for (const campaign of mockCampaigns) {
-      if (
-        campaign.status === 'active' &&
-        campaign.expiryDate &&
-        now > new Date(campaign.expiryDate)
-      ) {
-        campaign.status = 'expired';
-        campaign.updatedAt = now.toISOString();
-        expiredCount++;
-      }
-    }
-    return expiredCount;
-  }
 
   const db = getDb();
   const snapshot = await db
@@ -57,8 +44,13 @@ export async function expireCampaigns() {
  * Start periodic expiry checker (every hour).
  */
 export function startExpiryScheduler() {
+  if (!isFirebaseConfigured()) {
+    console.warn('Expiry scheduler skipped: Firebase Admin not configured');
+    return;
+  }
+
   expireCampaigns();
-  const INTERVAL = 60 * 60 * 1000; // 1 hour
+  const INTERVAL = 60 * 60 * 1000;
   setInterval(expireCampaigns, INTERVAL);
   console.log('Expiry scheduler started');
 }

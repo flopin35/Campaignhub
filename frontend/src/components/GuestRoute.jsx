@@ -1,21 +1,22 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AuthLoading from './AuthLoading';
 
 /**
- * Redirect authenticated users away from login/signup pages.
+ * Redirect authenticated users away from login/signup.
+ * Unverified users go to verify-email instead of dashboard.
  */
 export default function GuestRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { user, loading, isVerified } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <AuthLoading />;
   }
 
-  if (isAuthenticated) {
+  if (user) {
+    if (!isVerified) {
+      return <Navigate to="/verify-email" replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 

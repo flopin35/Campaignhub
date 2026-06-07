@@ -30,6 +30,8 @@ import {
 
   toggleCampaignDisabled,
 
+  approveCampaign,
+
 } from '../services/campaignFirestoreService';
 
 import { activateCampaignBoost, clearCampaignBoost } from '../services/boostService';
@@ -40,9 +42,13 @@ import {
 
   verifyPaymentAndActivate,
 
+  verifyPremiumPayment,
+
   rejectPayment,
 
   getPaymentByCampaign,
+
+  getRevenueSummary,
 
 } from '../services/paymentService';
 
@@ -55,6 +61,8 @@ import { getStatusLabel, isBoostActive } from '../utils/campaignHelpers';
 import { PACKAGES } from '../data/packages';
 
 import { db } from '../firebase/auth';
+
+import { createNotification } from '../services/notificationService';
 
 import VerificationBadge from '../components/VerificationBadge';
 
@@ -94,6 +102,8 @@ export default function AdminDashboard() {
 
   const [payments, setPayments] = useState({});
 
+  const [revenue, setRevenue] = useState(null);
+
   const { campaigns, stats, loading, error } = useAdminCampaigns(filter);
 
 
@@ -103,6 +113,8 @@ export default function AdminDashboard() {
     getDocs(collection(db, 'payments')).then((snap) => {
 
       const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      setRevenue(getRevenueSummary(all));
 
       const map = {};
 
@@ -169,6 +181,40 @@ export default function AdminDashboard() {
     try {
 
       const payment = payments[campaign.id] || await getPaymentByCampaign(campaign.id);
+
+      if (payment?.purchaseType === 'premium' || payment?.purchaseType === 'hosting') {
+
+        await verifyPremiumPayment({ paymentId: payment.id, campaignId: campaign.id, payment, campaign });
+
+        toast(`Premium activated for "${campaign.title}"`, 'success');
+
+        return;
+
+      }
+
+      const isFree = campaign.packageType === 'free' || campaign.packagePrice === 0;
+
+      if (!payment && isFree) {
+
+        await approveCampaign(campaign.id, campaign.durationDays || 14);
+
+        await createNotification({
+
+          userId: campaign.ownerId,
+
+          message: `Your campaign "${campaign.title}" is now live!`,
+
+          type: 'campaign_approved',
+
+          campaignId: campaign.id,
+
+        });
+
+        toast(`"${campaign.title}" is now live!`, 'success');
+
+        return;
+
+      }
 
       if (!payment) throw new Error('No payment record found');
 
@@ -586,7 +632,51 @@ export default function AdminDashboard() {
 
         {activeTab === 'overview' && stats && (
 
-          <div className="mb-8"><AnalyticsWidget stats={stats} /></div>
+          <div className="mb-8 space-y-6">
+
+            <AnalyticsWidget stats={stats} />
+
+            {revenue && (
+
+              <div className="grid sm:grid-cols-4 gap-4">
+
+                <div className="card text-center py-4">
+
+                  <div className="text-2xl font-bold text-emerald-400">{revenue.totalRevenue.toLocaleString()} GHS</div>
+
+                  <div className="text-xs text-gray-500 mt-1">Verified revenue</div>
+
+                </div>
+
+                <div className="card text-center py-4">
+
+                  <div className="text-2xl font-bold text-amber-400">{revenue.pendingAmount.toLocaleString()} GHS</div>
+
+                  <div className="text-xs text-gray-500 mt-1">Pending review</div>
+
+                </div>
+
+                <div className="card text-center py-4">
+
+                  <div className="text-2xl font-bold text-white">{revenue.verifiedCount}</div>
+
+                  <div className="text-xs text-gray-500 mt-1">Verified payments</div>
+
+                </div>
+
+                <div className="card text-center py-4">
+
+                  <div className="text-2xl font-bold text-brand-400">{revenue.pendingCount}</div>
+
+                  <div className="text-xs text-gray-500 mt-1">Awaiting proof</div>
+
+                </div>
+
+              </div>
+
+            )}
+
+          </div>
 
         )}
 

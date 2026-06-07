@@ -1,7 +1,30 @@
 import axios from 'axios';
 import api from './api';
 
-const AI_DIRECT_URL = import.meta.env.VITE_AI_SERVICE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '');
+const AI_DIRECT_URL = import.meta.env.VITE_AI_SERVICE_URL || '';
+
+const GEMINI_TYPES = new Set(['presentation', 'caption', 'content', 'distribution']);
+const OPENAI_TYPES = new Set(['dashboard', 'analytics', 'management', 'guidance']);
+
+/** Resolve AI provider from type + page context */
+export function resolveAiType(explicitType, context = {}) {
+  if (explicitType && explicitType !== 'assistant') return explicitType;
+
+  const page = context.page || '';
+  if (page.startsWith('/dashboard') || page.startsWith('/admin') || page.includes('/performance')) {
+    return 'dashboard';
+  }
+  if (page.includes('/upload')) return 'presentation';
+  return explicitType || 'presentation';
+}
+
+export function isDashboardAi(type) {
+  return OPENAI_TYPES.has(type) || type === 'dashboard';
+}
+
+export function isPresentationAi(type) {
+  return GEMINI_TYPES.has(type) || type === 'presentation';
+}
 
 /** Extract reply text from backend or AI service response shapes */
 export function parseAiReply(payload) {
@@ -18,6 +41,7 @@ export function parseAiReply(payload) {
 }
 
 async function callAiDirect(message, context, type) {
+  if (!AI_DIRECT_URL) throw new Error('AI service URL not configured');
   const res = await axios.post(
     `${AI_DIRECT_URL}/api/ai/chat`,
     { message, context, type },
@@ -34,9 +58,18 @@ async function callAiDirect(message, context, type) {
 }
 
 export const aiService = {
+  /** Presentation content — routes to Gemini */
+  generatePresentation: (message, context = {}) =>
+    aiService.ask(message, context, 'presentation'),
+
+  /** Dashboard management — routes to OpenAI */
+  askDashboard: (message, context = {}) =>
+    aiService.ask(message, context, 'dashboard'),
+
   ask: async (message, context = {}, type = 'assistant') => {
+    const resolvedType = resolveAiType(type, context);
     try {
-      const res = await api.post('/ask-ai', { message, context, type });
+      const res = await api.post('/ask-ai', { message, context, type: resolvedType });
       const reply = parseAiReply(res.data);
       if (!reply) throw new Error('No AI response received');
       const meta = res.data?.data || res.data || {};
@@ -45,14 +78,14 @@ export const aiService = {
         mode: meta.mode,
         providers: meta.providers || [],
         fallback: meta.fallback || meta.mode === 'fallback',
+        aiType: resolvedType,
       };
     } catch (err) {
-      // Dev fallback: call AI service directly if Express backend is down
-      if (import.meta.env.DEV && AI_DIRECT_URL) {
+      if (AI_DIRECT_URL) {
         try {
-          return await callAiDirect(message, context, type);
+          return { ...(await callAiDirect(message, context, resolvedType)), aiType: resolvedType };
         } catch {
-          // fall through
+          /* fall through */
         }
       }
       throw err;

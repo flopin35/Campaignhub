@@ -1,7 +1,8 @@
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from '../firebase/auth';
 
-export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB banners
+export const MAX_PAYMENT_PROOF_SIZE = 1 * 1024 * 1024; // 1MB payment screenshots
 export const UPLOAD_TIMEOUT_MS = 60_000;
 export const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 export const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
@@ -282,8 +283,26 @@ export async function uploadGalleryImages(files, onProgress) {
   return results;
 }
 
+export function validatePaymentScreenshot(file) {
+  validateImageFile(file);
+  if (file.size > MAX_PAYMENT_PROOF_SIZE) {
+    throw new StorageUploadError(
+      'Payment screenshot is too large. Maximum size is 1MB. Try a smaller image or screenshot.',
+      'storage/file-too-large'
+    );
+  }
+}
+
 export async function uploadPaymentScreenshot(file, onProgress) {
-  return uploadToStorage(file, STORAGE_FOLDERS.PAYMENTS, { onProgress, label: 'screenshot' });
+  validatePaymentScreenshot(file);
+  const compressed = await compressImageIfNeeded(file);
+  if (compressed.size > MAX_PAYMENT_PROOF_SIZE) {
+    throw new StorageUploadError(
+      'Payment screenshot is still too large after compression. Maximum size is 1MB.',
+      'storage/file-too-large'
+    );
+  }
+  return uploadToStorage(compressed, STORAGE_FOLDERS.PAYMENTS, { onProgress, label: 'screenshot' });
 }
 
 export async function uploadAvatar(file, userId, onProgress) {

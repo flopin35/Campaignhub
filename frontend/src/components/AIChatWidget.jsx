@@ -1,42 +1,62 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { aiService } from '../services/aiService';
 import { MessageCircle, X } from './icons/AppIcons';
 
-const WELCOME =
-  "Hi! I'm your CampaignHub AI — powered by Gemini & GPT working together. Ask me about uploads, campaigns, sharing links, or growth tips.";
-
-const LOADING_LABELS = [
-  'Gemini analyzing…',
-  'GPT refining…',
-  'Combining insights…',
-];
+function isDashboardPage(path) {
+  return (
+    path.startsWith('/dashboard') ||
+    path.startsWith('/admin') ||
+    path.includes('/performance')
+  );
+}
 
 export default function AIChatWidget({ context = {} }) {
   const location = useLocation();
+  const dashboardMode = isDashboardPage(location.pathname);
+
+  const welcome = useMemo(
+    () =>
+      dashboardMode
+        ? "Hi! I'm your Dashboard AI — powered by GPT. Ask about analytics, campaign performance, or what to do next."
+        : "Hi! I'm your Content AI — powered by Gemini. Ask for captions, slogans, hashtags, or help polishing your campaign copy.",
+    [dashboardMode]
+  );
+
+  const loadingLabels = useMemo(
+    () =>
+      dashboardMode
+        ? ['Analyzing dashboard…', 'Reviewing performance…', 'Preparing advice…']
+        : ['Crafting copy…', 'Polishing content…', 'Almost ready…'],
+    [dashboardMode]
+  );
+
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([{ role: 'assistant', content: WELCOME }]);
+  const [messages, setMessages] = useState([{ role: 'assistant', content: welcome }]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingLabel, setLoadingLabel] = useState(LOADING_LABELS[0]);
+  const [loadingLabel, setLoadingLabel] = useState(loadingLabels[0]);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    setMessages([{ role: 'assistant', content: welcome }]);
+  }, [welcome]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loadingLabel]);
 
-  // Cycle loading labels for smooth dual-AI feel
   useEffect(() => {
     if (!loading) return;
     let i = 0;
-    setLoadingLabel(LOADING_LABELS[0]);
+    setLoadingLabel(loadingLabels[0]);
     const interval = setInterval(() => {
-      i = (i + 1) % LOADING_LABELS.length;
-      setLoadingLabel(LOADING_LABELS[i]);
+      i = (i + 1) % loadingLabels.length;
+      setLoadingLabel(loadingLabels[i]);
     }, 1200);
     return () => clearInterval(interval);
-  }, [loading]);
+  }, [loading, loadingLabels]);
 
   const sendMessage = async (e) => {
     e.preventDefault();
@@ -54,22 +74,19 @@ export default function AIChatWidget({ context = {} }) {
 
     try {
       const page = location.pathname;
-      const response = await aiService.ask(userMessage, {
-        ...context,
-        page,
-        history,
-      });
+      const chatType = dashboardMode ? 'dashboard' : 'presentation';
+      const response = await aiService.ask(userMessage, { ...context, page, history }, chatType);
 
       const reply = response.reply || 'Sorry, I could not process that.';
-      const mode = response.mode;
       const providers = response.providers || [];
+      const mode = response.mode;
 
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
           content: reply,
-          meta: mode === 'collaborative' ? providers : null,
+          meta: providers.length ? providers : mode === 'openai' || mode === 'gemini' ? [mode] : null,
         },
       ]);
     } catch {
@@ -85,6 +102,10 @@ export default function AIChatWidget({ context = {} }) {
     }
   };
 
+  const badge = dashboardMode
+    ? { label: 'GPT', sub: 'Dashboard AI', color: 'emerald' }
+    : { label: 'G', sub: 'Content AI', color: 'blue' };
+
   return (
     <>
       <AnimatePresence>
@@ -96,20 +117,20 @@ export default function AIChatWidget({ context = {} }) {
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             className="fixed bottom-24 right-6 z-50 w-[380px] max-w-[calc(100vw-3rem)] h-[500px] bg-surface-card border border-surface-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-surface-border bg-surface-elevated">
               <div className="flex items-center gap-2.5">
-                <div className="flex -space-x-1">
-                  <div className="w-6 h-6 rounded-md bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] font-bold text-blue-400">
-                    G
-                  </div>
-                  <div className="w-6 h-6 rounded-md bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-[10px] font-bold text-emerald-400">
-                    AI
-                  </div>
+                <div
+                  className={`w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                    dashboardMode
+                      ? 'bg-emerald-500/20 border border-emerald-500/30 text-emerald-400'
+                      : 'bg-blue-500/20 border border-blue-500/30 text-blue-400'
+                  }`}
+                >
+                  {badge.label}
                 </div>
                 <div>
                   <span className="font-medium text-sm block leading-tight">CampaignHub AI</span>
-                  <span className="text-[10px] text-gray-500">Gemini + GPT</span>
+                  <span className="text-[10px] text-gray-500">{badge.sub}</span>
                 </div>
               </div>
               <button
@@ -121,7 +142,6 @@ export default function AIChatWidget({ context = {} }) {
               </button>
             </div>
 
-            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.map((msg, i) => (
                 <motion.div
@@ -144,7 +164,7 @@ export default function AIChatWidget({ context = {} }) {
                         {msg.meta.includes('gemini') && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">Gemini</span>
                         )}
-                        {msg.meta.includes('openai') && (
+                        {(msg.meta.includes('openai') || msg.meta.includes('gpt')) && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">GPT</span>
                         )}
                       </div>
@@ -154,17 +174,17 @@ export default function AIChatWidget({ context = {} }) {
               ))}
 
               {loading && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex justify-start"
-                >
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
                   <div className="bg-surface-elevated px-4 py-3 rounded-2xl rounded-bl-md">
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">
-                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" />
-                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce [animation-delay:0.15s]" />
-                        <span className="w-1.5 h-1.5 bg-brand-400 rounded-full animate-bounce [animation-delay:0.3s]" />
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full animate-bounce ${
+                            dashboardMode ? 'bg-emerald-400' : 'bg-blue-400'
+                          }`}
+                        />
+                        <span className="w-1.5 h-1.5 bg-brand-400 rounded-full animate-bounce [animation-delay:0.15s]" />
+                        <span className="w-1.5 h-1.5 bg-gray-500 rounded-full animate-bounce [animation-delay:0.3s]" />
                       </div>
                       <span className="text-xs text-gray-500">{loadingLabel}</span>
                     </div>
@@ -174,14 +194,15 @@ export default function AIChatWidget({ context = {} }) {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
             <form onSubmit={sendMessage} className="p-3 border-t border-surface-border bg-surface/50">
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask anything about campaigns…"
+                  placeholder={
+                    dashboardMode ? 'Ask about analytics or campaign management…' : 'Ask for captions, slogans, or copy…'
+                  }
                   className="input-field text-sm py-2.5 flex-1"
                   disabled={loading}
                 />

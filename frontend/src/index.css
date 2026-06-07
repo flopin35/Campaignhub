@@ -95,11 +95,11 @@
   }
 
   .section-title {
-    @apply text-2xl sm:text-3xl font-bold text-white tracking-tight;
+    @apply text-xl sm:text-2xl font-bold text-white tracking-tight;
   }
 
   .section-subtitle {
-    @apply text-gray-400 text-base sm:text-lg mt-2 max-w-2xl;
+    @apply text-gray-400 text-sm sm:text-base mt-1.5 max-w-2xl leading-relaxed;
   }
 
   .auth-card {
@@ -118,6 +118,43 @@
   .package-card-selected {
     @apply border-brand-500 ring-2 ring-brand-500/30 bg-brand-600/10;
     box-shadow: 0 0 40px -8px rgba(59, 130, 246, 0.45);
+  }
+
+  .premium-card {
+    @apply glass-card p-6 transition-all duration-300 hover:border-brand-500/25;
+  }
+
+  .premium-card-selected {
+    @apply border-brand-500 ring-2 ring-brand-500/25 bg-brand-600/5;
+  }
+
+  .premium-card-popular {
+    @apply border-brand-500/40;
+    box-shadow: 0 0 32px -8px rgba(59, 130, 246, 0.3);
+  }
+
+  .premium-card-glow {
+    box-shadow: 0 0 40px -10px rgba(59, 130, 246, 0.35);
+  }
+
+  .premium-card-bundle {
+    @apply border-brand-500/20;
+  }
+
+  .trust-block {
+    @apply glass-card border-emerald-500/10;
+  }
+
+  .page-section {
+    @apply scroll-mt-20;
+  }
+
+  .stat-card {
+    @apply card text-center py-4 px-3;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
   }
 
   .step-badge {

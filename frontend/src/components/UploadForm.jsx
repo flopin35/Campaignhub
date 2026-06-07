@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import { CATEGORIES, CAMPAIGN_TYPES } from '../utils/campaignHelpers';
+import { validateCampaignContent, CONTENT_LIMITS } from '../utils/contentQuality';
 import AIUploadHelper from './AIUploadHelper';
 import ImageDropzone, { GalleryDropzone } from './ImageDropzone';
 
@@ -79,10 +80,12 @@ export default function UploadForm({ onComplete, defaultEmail = '' }) {
 
   const validate = () => {
     const next = {};
-    if (!form.title.trim()) next.title = 'Title is required';
-    if (!form.description.trim()) next.description = 'Description is required';
     if (!banner) next.banner = 'Banner image is required';
     if (!form.contactPhone.trim()) next.contactPhone = 'Contact number is required';
+
+    const content = validateCampaignContent({ title: form.title, description: form.description });
+    Object.assign(next, content.errors);
+
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -148,6 +151,7 @@ export default function UploadForm({ onComplete, defaultEmail = '' }) {
         <label className="block text-sm font-medium text-gray-300 mb-2">Description *</label>
         <textarea name="description" value={form.description} onChange={handleChange} rows={4} className={`input-field resize-none ${errors.description ? 'border-red-500/50' : ''}`} placeholder="Tell people about your campaign..." />
         {errors.description && <p className="text-xs text-red-400 mt-1">{errors.description}</p>}
+        <p className="text-[10px] text-gray-600 mt-1">Min {CONTENT_LIMITS.descriptionMin} characters · reviewed before approval</p>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">

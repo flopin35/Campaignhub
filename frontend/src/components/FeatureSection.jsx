@@ -1,21 +1,26 @@
 import { motion } from 'framer-motion';
-import { QrCode, BarChart3, Zap } from 'lucide-react';
+import { QrCode, BarChart3, Shield, Smartphone } from 'lucide-react';
 
 const features = [
   {
     icon: QrCode,
-    title: 'QR Sharing',
-    description: 'Every campaign gets a unique QR code and share link — perfect for posters, flyers, and social media.',
+    title: 'Share anywhere',
+    description: 'Every campaign gets a link and QR code — posters, WhatsApp, events, and social.',
   },
   {
     icon: BarChart3,
-    title: 'Campaign Analytics',
-    description: 'Track views, shares, and clicks in real time so you know what is working.',
+    title: 'Real analytics',
+    description: 'Track views, shares, and QR scans live. No fake numbers — all from Firestore.',
   },
   {
-    icon: Zap,
-    title: 'Fast Approval',
-    description: 'Pay via mobile money, upload proof, and go live after quick admin verification.',
+    icon: Shield,
+    title: 'Trusted approvals',
+    description: 'Admin-verified campaigns and payment proof. Built to reduce scams and build confidence.',
+  },
+  {
+    icon: Smartphone,
+    title: 'Mobile-first',
+    description: 'Designed for Android and iPhone — fast, touch-friendly, lightweight on low-end devices.',
   },
 ];
 
@@ -27,28 +32,28 @@ export default function FeatureSection() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-14"
+          className="mb-14"
         >
-          <h2 className="section-title">Built for modern campaigns</h2>
-          <p className="section-subtitle mx-auto">
-            Simple tools politicians, businesses, and organizers use to reach more people.
+          <h2 className="section-title">Solve real advertising pain points</h2>
+          <p className="section-subtitle">
+            Billboards are expensive with no tracking. Social media is slow and untrusted. CampaignHub gives you speed, visibility, and proof.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {features.map((f, i) => (
             <motion.div
               key={f.title}
-              initial={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="feature-card p-8"
+              transition={{ delay: i * 0.08 }}
+              className="feature-card p-6"
             >
-              <div className="w-12 h-12 rounded-xl bg-brand-600/15 border border-brand-500/25 flex items-center justify-center mb-5">
-                <f.icon className="w-6 h-6 text-brand-400" />
+              <div className="w-11 h-11 rounded-xl bg-brand-600/12 border border-brand-500/20 flex items-center justify-center mb-4">
+                <f.icon className="w-5 h-5 text-brand-400" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">{f.title}</h3>
+              <h3 className="text-base font-semibold text-white mb-2">{f.title}</h3>
               <p className="text-gray-400 text-sm leading-relaxed">{f.description}</p>
             </motion.div>
           ))}
@@ -57,5 +62,3 @@ export default function FeatureSection() {
     </section>
   );
 }
-
-// Re-export QrCode from lucide via AppIcons - need to add it

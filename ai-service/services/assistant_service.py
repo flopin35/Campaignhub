@@ -1,10 +1,9 @@
-from services.orchestrator_service import generate_response, generate_guidance
-from services import gemini_service, openai_service
+from services.ai_router import generate_response, generate_guidance
 from services.recommendation_service import get_recommendations
 
 
 async def handle_chat(message: str, context: dict = None, chat_type: str = "assistant") -> dict:
-    """Process chat through dual-AI orchestrator."""
+    """Route chat: Gemini for presentation, OpenAI for dashboard."""
     context = context or {}
 
     if chat_type == "guidance" and context.get("campaign"):
@@ -22,10 +21,10 @@ async def handle_chat(message: str, context: dict = None, chat_type: str = "assi
 
 
 async def handle_recommendations(campaigns: list, preferences: dict = None) -> dict:
-    """Dual-AI recommendations: Gemini ranks, OpenAI personalizes."""
+    """Dashboard recommendations — OpenAI pipeline."""
     recommendations = await get_recommendations(campaigns, preferences)
     return {
         "recommendations": recommendations,
         "count": len(recommendations),
-        "mode": "collaborative" if len(recommendations) > 0 else "empty",
+        "mode": "openai" if recommendations else "empty",
     }

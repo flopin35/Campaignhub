@@ -56,6 +56,9 @@ const CampaignPerformance = lazy(() => import('./pages/CampaignPerformance'));
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 
+const Premium = lazy(() => import('./pages/Premium'));
+const Support = lazy(() => import('./pages/Support'));
+
 
 
 function PageLoader() {
@@ -105,6 +108,9 @@ function App() {
             <Route path="/verify-email" element={<VerifyEmailPage />} />
 
 
+
+            <Route path="/premium" element={<Premium />} />
+            <Route path="/support" element={<Support />} />
 
             <Route path="/dashboard" element={<ProtectedVerifiedRoute><Dashboard /></ProtectedVerifiedRoute>} />
 

@@ -44,8 +44,8 @@ async def recommendations(request: RecommendationRequest):
 async def ai_status():
     """Health check showing both AI providers."""
     return {
-        "mode": "dual",
-        "gemini": {"configured": gemini_service.is_configured(), "role": "fast + ranking"},
-        "openai": {"configured": openai_service.is_configured(), "role": "synthesis + creative"},
-        "collaboration": gemini_service.is_configured() and openai_service.is_configured(),
+        "mode": "split",
+        "gemini": {"configured": gemini_service.is_configured(), "role": "presentation & content"},
+        "openai": {"configured": openai_service.is_configured(), "role": "dashboard & analytics"},
+        "split_routing": True,
     }

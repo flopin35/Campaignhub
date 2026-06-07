@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import HeroSection from '../components/HeroSection';
 import FeatureSection from '../components/FeatureSection';
 import HowItWorks from '../components/HowItWorks';
+import TrustSection from '../components/TrustSection';
+import PremiumFeaturesSection from '../components/PremiumFeaturesSection';
 import CampaignCard from '../components/CampaignCard';
 import CampaignSkeleton from '../components/CampaignSkeleton';
 import EmptyState from '../components/EmptyState';
@@ -25,7 +27,7 @@ export default function Home() {
       <HeroSection campaignCount={liveCampaigns.length} />
 
       {!loading && featuredCampaign && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 mb-4">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 mb-4">
           <FeaturedBanner campaign={featuredCampaign} />
         </section>
       )}
@@ -35,6 +37,8 @@ export default function Home() {
 
       <FeatureSection />
       <HowItWorks />
+      <PremiumFeaturesSection />
+      <TrustSection />
 
       <section className="py-20 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -58,8 +62,8 @@ export default function Home() {
           ) : liveCampaigns.length === 0 ? (
             <EmptyState
               title="No live campaigns yet"
-              description="Be the first to launch a campaign on CampaignHub."
-              actionLabel="Launch Campaign"
+              description="Be the first to launch a free campaign on CampaignHub."
+              actionLabel="Launch Free Campaign"
               actionTo="/upload"
             />
           ) : (

@@ -9,6 +9,7 @@ import VerifyEmailNotice from './VerifyEmailNotice';
 const navLinks = [
   { to: '/', label: 'Home' },
   { to: '/campaigns', label: 'Campaigns' },
+  { to: '/premium', label: 'Premium' },
   { to: '/dashboard', label: 'Dashboard' },
 ];
 

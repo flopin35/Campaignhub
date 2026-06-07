@@ -72,6 +72,14 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {active.length > 0 && (
+          <div className="mb-8 glass-card p-5">
+            <p className="text-sm font-medium text-white mb-1">Premium upgrades</p>
+            <p className="text-xs text-gray-500 mb-3">Boost visibility, unlock AI, verified badges, and advanced analytics per campaign.</p>
+            <Link to="/premium" className="btn-secondary text-sm">View premium tools</Link>
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-3 mb-8">
           {isVerified ? (
             <Link to="/upload" className="btn-primary text-sm">Launch Campaign</Link>

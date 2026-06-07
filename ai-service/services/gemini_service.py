@@ -9,23 +9,27 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-flash-lite-latest")
 
-SYSTEM_PROMPT = """You are CampaignHub Gemini Assistant — fast, platform-savvy guide for a digital campaign hosting platform.
+SYSTEM_PROMPT = """You are CampaignHub Gemini — specialist in campaign presentation and marketing content for Ghana.
 
-Focus on:
-- Quick, accurate platform navigation help
-- Campaign upload steps and status flow (pending → active → expired)
-- Package options (Starter 7d, Standard 14d, Premium 30d, Elite 45d) and unique slug URLs
-- Manual MoMo payment flow before admin approval
-- Sharing via link, QR code, WhatsApp, and social media
+Your role: GENERATE and POLISH campaign content.
+- Catchy titles, slogans, captions, hashtags, CTAs
+- WhatsApp, Facebook, Instagram, TikTok post formats
+- Short compelling descriptions and share copy
+- Banner/poster messaging ideas
 
-Keep responses concise, friendly, and actionable. Max 3-4 sentences unless detail is needed."""
+Platform context (brief only when asked):
+- Free campaigns on CampaignHub; premium boosts visibility
+- Telecel Cash payments with CH- reference codes
+- Share via link, QR code, WhatsApp
+
+Write ready-to-use copy. Be creative, concise, and professional. Match the user's category and audience."""
 
 
 def is_configured() -> bool:
     return bool(GEMINI_API_KEY)
 
 
-def _build_context(context: dict) -> str:
+def _build_context(context: dict, chat_type: str = '') -> str:
     parts = []
     if context.get("campaignTitle"):
         parts.append(f"Viewing campaign: {context['campaignTitle']}")
@@ -33,11 +37,17 @@ def _build_context(context: dict) -> str:
         parts.append(f"Current page: {context['page']}")
     if context.get("category"):
         parts.append(f"Category: {context['category']}")
+    if context.get("platform"):
+        parts.append(f"Target platform: {context['platform']}")
+    if context.get("type"):
+        parts.append(f"Content type: {context['type']}")
+    if chat_type:
+        parts.append(f"Task: {chat_type}")
     return "\n".join(parts)
 
 
-async def chat(message: str, context: dict = None) -> str:
-    """Gemini-powered chat response with model fallback chain."""
+async def chat(message: str, context: dict = None, chat_type: str = "presentation") -> str:
+    """Gemini — presentation & content generation."""
     context = context or {}
 
     if not is_configured():
@@ -46,7 +56,7 @@ async def chat(message: str, context: dict = None) -> str:
     import google.generativeai as genai
 
     genai.configure(api_key=GEMINI_API_KEY)
-    context_str = _build_context(context)
+    context_str = _build_context(context, chat_type)
     prompt = f"{SYSTEM_PROMPT}\n{context_str}\n\nUser: {message}\n\nAssistant:"
 
     models = [

@@ -1,31 +1,31 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Upload, CreditCard, CheckCircle2 } from 'lucide-react';
+import { Upload, CheckCircle2, Share2 } from 'lucide-react';
 
 const steps = [
   {
     icon: Upload,
     step: '1',
-    title: 'Upload Campaign',
-    description: 'Add your banner, details, and pick a package that fits your budget.',
-  },
-  {
-    icon: CreditCard,
-    step: '2',
-    title: 'Make Payment',
-    description: 'Send mobile money using your unique reference, then upload payment proof.',
+    title: 'Create for free',
+    description: 'Upload your banner, add details, and submit. Free campaigns include share links, QR codes, and basic analytics.',
   },
   {
     icon: CheckCircle2,
+    step: '2',
+    title: 'Admin approves',
+    description: 'We review every campaign for trust. Paid packages require Telecel Cash proof with your unique CH- reference.',
+  },
+  {
+    icon: Share2,
     step: '3',
-    title: 'Admin Approves & Goes Live',
-    description: 'After verification your campaign goes live with a share link and QR code.',
+    title: 'Grow & upgrade',
+    description: 'Share your campaign, track performance, and add premium boosts, AI, verified badges, or multi-platform formats when ready.',
   },
 ];
 
 export default function HowItWorks() {
   return (
-    <section className="py-20 sm:py-24 bg-surface-card/40 border-y border-surface-border">
+    <section className="py-20 sm:py-24 bg-surface-card/30 border-y border-surface-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -33,8 +33,8 @@ export default function HowItWorks() {
           viewport={{ once: true }}
           className="text-center mb-14"
         >
-          <h2 className="section-title">How it works</h2>
-          <p className="section-subtitle mx-auto">Three simple steps from upload to live campaign.</p>
+          <h2 className="section-title">Simple, stable flow</h2>
+          <p className="section-subtitle mx-auto">Three steps. No clutter. No complicated marketing tools.</p>
         </motion.div>
 
         <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
@@ -57,15 +57,12 @@ export default function HowItWorks() {
                   <p className="text-gray-400 text-sm leading-relaxed">{s.description}</p>
                 </div>
               </div>
-              {i < steps.length - 1 && (
-                <div className="hidden md:block absolute top-5 -right-6 lg:-right-8 text-surface-border text-2xl">→</div>
-              )}
             </motion.div>
           ))}
         </div>
 
         <div className="text-center mt-12">
-          <Link to="/upload" className="btn-primary px-8 py-3">Start Your Campaign</Link>
+          <Link to="/upload" className="btn-primary px-8 py-3">Start Free</Link>
         </div>
       </div>
     </section>

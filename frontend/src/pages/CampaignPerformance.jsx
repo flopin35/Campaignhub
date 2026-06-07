@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import CampaignSkeleton from '../components/CampaignSkeleton';
 import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import ShareCampaignSection from '../components/ShareCampaignSection';
+import PremiumUpgradePanel from '../components/PremiumUpgradePanel';
+import MultiPlatformDistribution from '../components/MultiPlatformDistribution';
 
 export default function CampaignPerformance() {
   const { slug } = useParams();
@@ -42,7 +44,7 @@ export default function CampaignPerformance() {
           <div>
             <p className="text-xs text-brand-400 uppercase tracking-wide mb-1">Campaign Performance</p>
             <h1 className="text-2xl sm:text-3xl font-bold text-white">{campaign.title}</h1>
-            <p className="text-sm text-gray-500 mt-1">Growth · traffic · engagement metrics</p>
+            <p className="text-sm text-gray-500 mt-1">Growth · traffic · engagement · premium upgrades</p>
           </div>
           <div className="flex gap-2">
             <Link to={`/campaign/${slug}`} className="btn-secondary text-sm">View Campaign</Link>
@@ -51,6 +53,13 @@ export default function CampaignPerformance() {
         </div>
 
         <AnalyticsDashboard campaign={campaign} />
+
+        {isOwner && (
+          <div className="mt-8 space-y-8">
+            <MultiPlatformDistribution campaign={campaign} />
+            <PremiumUpgradePanel campaign={campaign} />
+          </div>
+        )}
 
         {campaign.status === 'active' && (
           <div className="mt-8">

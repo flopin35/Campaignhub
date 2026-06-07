@@ -53,13 +53,14 @@ export default function PaymentProofUpload({ onSubmit, loading, uploadProgress =
       className="glass-card p-6 space-y-6"
     >
       <div>
-        <h2 className="text-xl font-bold text-white">Upload Payment Proof</h2>
-        <p className="text-sm text-gray-400 mt-1">Upload a screenshot of your mobile money payment confirmation.</p>
+        <h2 className="text-lg font-bold text-white">Upload Payment Proof</h2>
+        <p className="text-sm text-gray-500 mt-1">Screenshot of your Telecel Cash confirmation · max 1MB</p>
+        <p className="text-xs text-amber-400/80 mt-2">Status after upload: <span className="font-medium">Pending Review</span></p>
       </div>
 
       <ImageDropzone
         label="Payment Screenshot *"
-        hint="JPG, PNG, WEBP — max 5MB"
+        hint="JPG, PNG, WEBP — max 1MB"
         value={file}
         previewUrl={preview}
         onChange={handleChange}
@@ -85,7 +86,7 @@ export default function PaymentProofUpload({ onSubmit, loading, uploadProgress =
         </div>
       )}
 
-      <button type="submit" disabled={!file || loading} className="btn-primary w-full py-3 disabled:opacity-50">
+      <button type="submit" disabled={!file || loading} className="btn-primary w-full py-3.5 min-h-[48px] disabled:opacity-50">
         {loading ? 'Uploading…' : 'Submit Proof'}
       </button>
     </motion.form>

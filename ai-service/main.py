@@ -30,7 +30,7 @@ async def health():
     return {
         "status": "healthy",
         "service": "CampaignHub AI",
-        "mode": "dual",
+        "mode": "split",
         "gemini": gemini_service.is_configured(),
         "openai": openai_service.is_configured(),
     }

@@ -19,11 +19,13 @@ import { saveAuthReturnPath } from '../utils/authRedirect';
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
+googleProvider.addScope('email');
+googleProvider.addScope('profile');
 
-/** Ensure getRedirectResult runs only once (React StrictMode / double mount safe). */
+/** Ensure getRedirectResult runs only once (React StrictMode safe). */
 let redirectResultPromise = null;
 
-async function getRedirectResultOnce() {
+function getRedirectResultOnce() {
   if (!redirectResultPromise) {
     redirectResultPromise = getRedirectResult(auth).catch((err) => {
       redirectResultPromise = null;
@@ -33,11 +35,22 @@ async function getRedirectResultOnce() {
   return redirectResultPromise;
 }
 
-let persistenceReady = false;
-async function ensureAuthPersistence() {
-  if (persistenceReady || typeof window === 'undefined') return;
+/**
+ * Set persistence before starting sign-in — NEVER call before getRedirectResult on page load
+ * (that clears the pending OAuth result and breaks Google redirect sign-in).
+ */
+async function prepareForSignIn() {
+  if (typeof window === 'undefined') return;
   await setPersistence(auth, browserLocalPersistence);
-  persistenceReady = true;
+}
+
+async function saveProfileSafe(user, name = '') {
+  try {
+    return await saveUserToFirestore(user, name);
+  } catch (err) {
+    console.error('Could not save user profile:', err);
+    return null;
+  }
 }
 
 export function isMobileDevice() {
@@ -48,11 +61,11 @@ export function isMobileDevice() {
   );
 }
 
-/** Prefer redirect on mobile and when popups are unreliable in production. */
+/** Redirect is most reliable on mobile, in-app browsers, and production HTTPS. */
 export function shouldUseGoogleRedirect() {
   if (typeof window === 'undefined') return false;
+  if (import.meta.env.PROD) return true;
   if (isMobileDevice()) return true;
-  // In-app browsers (Instagram, Facebook, etc.) block popups
   if (/FBAN|FBAV|Instagram|Line\//i.test(navigator.userAgent)) return true;
   return false;
 }
@@ -121,25 +134,24 @@ export async function loginWithEmail(email, password) {
 
 async function startGoogleRedirect(returnTo) {
   saveAuthReturnPath(returnTo || '/dashboard');
-  await ensureAuthPersistence();
+  await prepareForSignIn();
   await signInWithRedirect(auth, googleProvider);
 }
 
 /**
- * Google sign-in: popup on desktop, redirect on mobile / in-app browsers.
- * Returns null when redirect is initiated (result handled via handleGoogleRedirectResult).
+ * Google sign-in. Returns null when redirect flow starts (completed on return via handleGoogleRedirectResult).
  */
 export async function signInWithGoogle({ returnTo = '/dashboard' } = {}) {
-  await ensureAuthPersistence();
-
   if (shouldUseGoogleRedirect()) {
     await startGoogleRedirect(returnTo);
     return null;
   }
 
+  await prepareForSignIn();
+
   try {
     const credential = await signInWithPopup(auth, googleProvider);
-    const profile = await saveUserToFirestore(credential.user);
+    const profile = await saveProfileSafe(credential.user);
     return { user: credential.user, profile };
   } catch (err) {
     if (
@@ -159,13 +171,15 @@ export async function signInWithGoogle({ returnTo = '/dashboard' } = {}) {
   }
 }
 
-/** Call on app load to complete Google redirect sign-in. Must run before routing decisions. */
+/**
+ * Complete Google redirect sign-in after page reload.
+ * Must NOT call setPersistence here — that wipes the pending OAuth result.
+ */
 export async function handleGoogleRedirectResult() {
-  await ensureAuthPersistence();
   try {
     const result = await getRedirectResultOnce();
     if (!result?.user) return null;
-    const profile = await saveUserToFirestore(result.user);
+    const profile = await saveProfileSafe(result.user);
     return { user: result.user, profile };
   } catch (err) {
     if (err.code === 'auth/account-exists-with-different-credential') {
@@ -194,7 +208,7 @@ export async function refreshAuthUser() {
   await user.reload();
   const refreshed = auth.currentUser;
   if (refreshed) {
-    await saveUserToFirestore(refreshed);
+    await saveProfileSafe(refreshed);
   }
   return refreshed;
 }

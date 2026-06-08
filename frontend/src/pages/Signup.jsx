@@ -72,7 +72,11 @@ export default function Signup() {
             </div>
           )}
 
-          <GoogleSignInButton onSuccess={handleGoogleSuccess} label="Sign up with Google" />
+          <GoogleSignInButton
+            onSuccess={handleGoogleSuccess}
+            label="Sign up with Google"
+            returnTo="/dashboard"
+          />
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

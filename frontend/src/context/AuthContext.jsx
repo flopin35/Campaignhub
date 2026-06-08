@@ -6,6 +6,7 @@ import {
   logout as authLogout,
   refreshAuthUser,
   handleGoogleRedirectResult,
+  saveUserToFirestore,
   isUserVerified,
 } from '../services/authService';
 import { useToast } from './ToastContext';
@@ -17,14 +18,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [redirectResult, setRedirectResult] = useState(null);
 
   const loadProfile = useCallback(async (firebaseUser) => {
     if (!firebaseUser) {
       setUserProfile(null);
       return null;
     }
-    const profile = await getUserProfile(firebaseUser.uid);
+    let profile = await getUserProfile(firebaseUser.uid);
+    if (!profile) {
+      profile = await saveUserToFirestore(firebaseUser).catch(() => null);
+    }
     setUserProfile(profile);
     return profile;
   }, []);
@@ -34,10 +37,14 @@ export function AuthProvider({ children }) {
     let unsubscribe = () => {};
 
     (async () => {
+      // CRITICAL: getRedirectResult first — no setPersistence before this
       try {
-        const result = await handleGoogleRedirectResult();
-        if (mounted && result) {
-          setRedirectResult(result);
+        const redirectResult = await handleGoogleRedirectResult();
+        if (mounted && redirectResult?.user) {
+          setUser(redirectResult.user);
+          if (redirectResult.profile) {
+            setUserProfile(redirectResult.profile);
+          }
         }
       } catch (err) {
         if (mounted) {
@@ -63,7 +70,6 @@ export function AuthProvider({ children }) {
     };
   }, [loadProfile, toast]);
 
-  /** Auto-refresh verification status while user is pending verification */
   useEffect(() => {
     if (!user || isUserVerified(user, userProfile)) return undefined;
 
@@ -75,7 +81,7 @@ export function AuthProvider({ children }) {
           await loadProfile(updated);
         }
       } catch {
-        /* silent — user may retry manually */
+        /* user can retry manually */
       }
     }, 5000);
 
@@ -86,7 +92,6 @@ export function AuthProvider({ children }) {
     await authLogout();
     setUser(null);
     setUserProfile(null);
-    setRedirectResult(null);
   };
 
   const refreshUser = async () => {
@@ -98,16 +103,13 @@ export function AuthProvider({ children }) {
     return updated;
   };
 
-  const verified = isUserVerified(user, userProfile);
-
   const value = {
     user,
     userProfile,
     loading,
-    redirectResult,
     isAuthenticated: !!user,
     isAdmin: checkIsAdmin(user, userProfile),
-    isVerified: verified,
+    isVerified: isUserVerified(user, userProfile),
     logout,
     refreshUser,
     setUserProfile,

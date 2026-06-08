@@ -21,6 +21,7 @@ export function getAuthErrorMessage(code) {
     'auth/internal-error': 'Sign-in failed. Please refresh the page and try again.',
     'auth/web-storage-unsupported':
       'Your browser blocked sign-in storage. Enable cookies or try a different browser.',
+    'auth/timeout': 'Sign-in timed out. Please try again.',
   };
   return messages[code] || null;
 }

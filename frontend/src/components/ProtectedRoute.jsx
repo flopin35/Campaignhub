@@ -9,7 +9,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
   const location = useLocation();
 
   if (loading) {
-    return <AuthLoading message="Checking your session…" />;
+    return <AuthLoading message="Checking your session…" stage="Securing your session…" />;
   }
 
   if (!user) {

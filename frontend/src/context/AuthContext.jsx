@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, isAdmin as checkIsAdmin } from '../firebase/auth';
 import {
@@ -10,6 +10,8 @@ import {
   isUserVerified,
 } from '../services/authService';
 import { useToast } from './ToastContext';
+import { authLog } from '../utils/authLogger';
+import { getLastAuthProvider } from '../utils/authSession';
 
 const AuthContext = createContext(null);
 
@@ -18,6 +20,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authPhase, setAuthPhase] = useState('initializing');
 
   const loadProfile = useCallback(async (firebaseUser) => {
     if (!firebaseUser) {
@@ -37,23 +40,28 @@ export function AuthProvider({ children }) {
     let unsubscribe = () => {};
 
     (async () => {
-      // CRITICAL: getRedirectResult first — no setPersistence before this
+      setAuthPhase('redirect');
+      authLog.info('Auth bootstrap start');
+
       try {
         const redirectResult = await handleGoogleRedirectResult();
         if (mounted && redirectResult?.user) {
+          authLog.google('Redirect session restored', redirectResult.user.email);
           setUser(redirectResult.user);
-          if (redirectResult.profile) {
-            setUserProfile(redirectResult.profile);
-          }
+          if (redirectResult.profile) setUserProfile(redirectResult.profile);
         }
       } catch (err) {
         if (mounted) {
+          authLog.error('Redirect failed', err.message);
           toast(err.message || 'Google sign-in failed. Please try again.', 'error');
         }
       }
 
+      if (mounted) setAuthPhase('restoring');
+
       unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (!mounted) return;
+        authLog.session('Auth state changed', firebaseUser?.email || 'signed out');
         setUser(firebaseUser);
         if (firebaseUser) {
           await loadProfile(firebaseUser);
@@ -61,6 +69,7 @@ export function AuthProvider({ children }) {
           setUserProfile(null);
         }
         setLoading(false);
+        setAuthPhase('ready');
       });
     })();
 
@@ -81,7 +90,7 @@ export function AuthProvider({ children }) {
           await loadProfile(updated);
         }
       } catch {
-        /* user can retry manually */
+        /* manual retry available */
       }
     }, 5000);
 
@@ -92,6 +101,7 @@ export function AuthProvider({ children }) {
     await authLogout();
     setUser(null);
     setUserProfile(null);
+    setAuthPhase('ready');
   };
 
   const refreshUser = async () => {
@@ -103,10 +113,20 @@ export function AuthProvider({ children }) {
     return updated;
   };
 
+  const loadingMessage = useMemo(() => {
+    if (authPhase === 'redirect') return 'Redirecting safely…';
+    if (authPhase === 'restoring') return 'Securing your session…';
+    if (authPhase === 'initializing') return 'Loading…';
+    return 'Restoring dashboard…';
+  }, [authPhase]);
+
   const value = {
     user,
     userProfile,
     loading,
+    authPhase,
+    loadingMessage,
+    lastAuthProvider: getLastAuthProvider(),
     isAuthenticated: !!user,
     isAdmin: checkIsAdmin(user, userProfile),
     isVerified: isUserVerified(user, userProfile),

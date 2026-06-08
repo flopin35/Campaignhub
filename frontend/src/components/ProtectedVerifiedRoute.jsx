@@ -11,7 +11,7 @@ export default function ProtectedVerifiedRoute({ children }) {
   const location = useLocation();
 
   if (loading) {
-    return <AuthLoading message="Checking your session…" />;
+    return <AuthLoading message="Checking your session…" stage="Securing your session…" />;
   }
 
   if (!user) {

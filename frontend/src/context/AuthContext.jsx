@@ -6,57 +6,66 @@ import {
   logout as authLogout,
   refreshAuthUser,
   handleGoogleRedirectResult,
+  isUserVerified,
 } from '../services/authService';
+import { useToast } from './ToastContext';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const { toast } = useToast();
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [redirectProcessing, setRedirectProcessing] = useState(true);
+  const [redirectResult, setRedirectResult] = useState(null);
 
   const loadProfile = useCallback(async (firebaseUser) => {
     if (!firebaseUser) {
       setUserProfile(null);
-      return;
+      return null;
     }
     const profile = await getUserProfile(firebaseUser.uid);
     setUserProfile(profile);
+    return profile;
   }, []);
 
   useEffect(() => {
     let mounted = true;
+    let unsubscribe = () => {};
 
     (async () => {
       try {
-        await handleGoogleRedirectResult();
+        const result = await handleGoogleRedirectResult();
+        if (mounted && result) {
+          setRedirectResult(result);
+        }
       } catch (err) {
-        console.error('Google redirect sign-in failed:', err.message);
-      } finally {
-        if (mounted) setRedirectProcessing(false);
+        if (mounted) {
+          toast(err.message || 'Google sign-in failed. Please try again.', 'error');
+        }
       }
-    })();
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser) {
-        await loadProfile(firebaseUser);
-      } else {
-        setUserProfile(null);
-      }
-      if (mounted) setLoading(false);
-    });
+      unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!mounted) return;
+        setUser(firebaseUser);
+        if (firebaseUser) {
+          await loadProfile(firebaseUser);
+        } else {
+          setUserProfile(null);
+        }
+        setLoading(false);
+      });
+    })();
 
     return () => {
       mounted = false;
       unsubscribe();
     };
-  }, [loadProfile]);
+  }, [loadProfile, toast]);
 
   /** Auto-refresh verification status while user is pending verification */
   useEffect(() => {
-    if (!user || user.emailVerified) return undefined;
+    if (!user || isUserVerified(user, userProfile)) return undefined;
 
     const interval = setInterval(async () => {
       try {
@@ -71,12 +80,13 @@ export function AuthProvider({ children }) {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [user?.uid, user?.emailVerified, loadProfile]);
+  }, [user?.uid, user?.emailVerified, userProfile, loadProfile]);
 
   const logout = async () => {
     await authLogout();
     setUser(null);
     setUserProfile(null);
+    setRedirectResult(null);
   };
 
   const refreshUser = async () => {
@@ -88,13 +98,16 @@ export function AuthProvider({ children }) {
     return updated;
   };
 
+  const verified = isUserVerified(user, userProfile);
+
   const value = {
     user,
     userProfile,
-    loading: loading || redirectProcessing,
+    loading,
+    redirectResult,
     isAuthenticated: !!user,
     isAdmin: checkIsAdmin(user, userProfile),
-    isVerified: user?.emailVerified ?? false,
+    isVerified: verified,
     logout,
     refreshUser,
     setUserProfile,

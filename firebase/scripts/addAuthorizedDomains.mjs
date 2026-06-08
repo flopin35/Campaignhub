@@ -14,6 +14,7 @@ const PROJECT_ID = 'campaign-hub-b33c6';
 const DEFAULT_DOMAINS = [
   'www.campaignhubgh.com',
   'campaignhubgh.com',
+  'campaignhub-acqslp0j1-flopin35s-projects.vercel.app',
   'campaignhub-git-main-flopin35s-projects.vercel.app',
   'campaignhub-three.vercel.app',
   'frontend-sage-delta-25.vercel.app',

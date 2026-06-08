@@ -1,20 +1,28 @@
 import { useState } from 'react';
 import { signInWithGoogle } from '../services/authService';
 import { useToast } from '../context/ToastContext';
+import { saveAuthReturnPath } from '../utils/authRedirect';
 
-export default function GoogleSignInButton({ onSuccess, label = 'Continue with Google' }) {
+export default function GoogleSignInButton({
+  onSuccess,
+  label = 'Continue with Google',
+  returnTo = '/dashboard',
+}) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const handleClick = async () => {
     setLoading(true);
+    saveAuthReturnPath(returnTo);
     try {
-      const result = await signInWithGoogle();
+      const result = await signInWithGoogle({ returnTo });
       if (result) {
         toast('Signed in with Google', 'success');
         onSuccess?.(result);
       } else {
         toast('Redirecting to Google…', 'info');
+        // Page navigates away — keep loading state
+        return;
       }
     } catch (err) {
       const msg = err.message || 'Google sign-in failed';
@@ -23,7 +31,6 @@ export default function GoogleSignInButton({ onSuccess, label = 'Continue with G
       } else {
         toast(msg, 'error');
       }
-    } finally {
       setLoading(false);
     }
   };

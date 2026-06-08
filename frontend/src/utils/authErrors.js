@@ -16,6 +16,11 @@ export function getAuthErrorMessage(code) {
       'An account already exists with this email using a different sign-in method.',
     'auth/user-disabled': 'This account has been disabled.',
     'auth/operation-not-allowed': 'This sign-in method is not enabled.',
+    'auth/unauthorized-domain':
+      'This website is not authorized for sign-in. Contact support or try again from www.campaignhubgh.com.',
+    'auth/internal-error': 'Sign-in failed. Please refresh the page and try again.',
+    'auth/web-storage-unsupported':
+      'Your browser blocked sign-in storage. Enable cookies or try a different browser.',
   };
   return messages[code] || null;
 }

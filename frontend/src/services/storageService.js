@@ -1,5 +1,12 @@
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from '../firebase/auth';
+import { isGoogleUser, isOtpUser } from './authService';
+
+function userCanUpload(user) {
+  if (!user) return false;
+  if (isGoogleUser(user) || isOtpUser(user)) return true;
+  return user.emailVerified === true;
+}
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB banners
 export const MAX_PAYMENT_PROOF_SIZE = 1 * 1024 * 1024; // 1MB payment screenshots
@@ -171,7 +178,7 @@ export async function uploadToStorage(file, folder, options = {}) {
     );
   }
 
-  if (!auth.currentUser.emailVerified) {
+  if (!userCanUpload(auth.currentUser)) {
     throw new StorageUploadError(
       'Please verify your email before uploading files. Check your inbox for the verification link.',
       'storage/unverified'

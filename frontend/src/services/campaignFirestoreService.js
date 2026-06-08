@@ -19,6 +19,7 @@ import { generateSlug, appendSlugSuffix } from '../utils/slugGenerator';
 import { normalizeCampaign, addDays, toDate } from '../utils/campaignHelpers';
 import { uploadBanner, uploadGalleryImages, uploadLogo } from './storageService';
 import { auth } from '../firebase/auth';
+import { isUserVerified, getUserProfile } from './authService';
 
 const CAMPAIGNS = 'campaigns';
 
@@ -66,7 +67,10 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   if (!bannerFile) throw new Error('Banner image is required');
   if (!pkg) throw new Error('Please select a package');
   if (!ownerId) throw new Error('You must be signed in to create a campaign');
-  if (!auth.currentUser?.emailVerified) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('You must be signed in to create a campaign');
+  const profile = await getUserProfile(currentUser.uid);
+  if (!isUserVerified(currentUser, profile)) {
     throw new Error('Please verify your email before launching a campaign.');
   }
 

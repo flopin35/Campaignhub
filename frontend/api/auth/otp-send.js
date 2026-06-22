@@ -5,12 +5,12 @@ import {
   normalizeEmail,
   emailDocId,
   sendOtpEmail,
+  randomUUID,
 } from '../_lib/otpHelpers.js';
 
 const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_SENDS_PER_HOUR = 5;
-const MAX_VERIFY_ATTEMPTS = 5;
 
 function json(res, status, body) {
   res.status(status).json(body);
@@ -34,11 +34,14 @@ export default async function handler(req, res) {
     if (!admin) {
       return json(res, 503, {
         success: false,
-        message: 'OTP service unavailable. Use Google sign-in or contact support.',
+        message:
+          'OTP service is starting up. Add Firebase Admin credentials to Vercel (FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY), or use Google sign-in.',
+        code: 'OTP_ADMIN_MISSING',
       });
     }
 
-    const secret = process.env.OTP_SECRET || process.env.JWT_SECRET || 'campaignhub-otp-secret';
+    const secret =
+      process.env.OTP_SECRET || process.env.JWT_SECRET || 'campaignhub-otp-secret-change-me';
     const docId = emailDocId(email);
     const ref = admin.db.collection('auth_otp').doc(docId);
     const snap = await ref.get();
@@ -91,7 +94,7 @@ export default async function handler(req, res) {
 
     return json(res, 200, {
       success: true,
-      message: 'Verification code sent.',
+      message: 'Verification code sent. Check your inbox.',
       expiresIn: OTP_EXPIRY_MS / 1000,
       cooldownSeconds: RESEND_COOLDOWN_MS / 1000,
     });

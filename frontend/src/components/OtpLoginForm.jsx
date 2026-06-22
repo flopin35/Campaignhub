@@ -32,7 +32,12 @@ export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
       setDigits(Array(OTP_LENGTH).fill(''));
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } catch (err) {
-      setError(err.message || 'Could not send code.');
+      const msg = err.message || 'Could not send code.';
+      if (msg.includes('OTP service') || msg.includes('OTP_ADMIN')) {
+        setError('Email login is being set up. Use Google sign-in for now, or try again shortly.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

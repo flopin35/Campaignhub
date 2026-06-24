@@ -1,13 +1,35 @@
 import api from './api';
-import { signInWithOtpCustomToken, sanitizeEmail } from './authService';
+import { signInWithOtpCustomToken, sanitizeEmail, sendEmailSignInLink } from './authService';
 import { authLog } from '../utils/authLogger';
+
+function isOtpServiceUnavailable(message = '') {
+  const msg = message.toLowerCase();
+  return (
+    msg.includes('otp service') ||
+    msg.includes('otp_admin') ||
+    msg.includes('starting up') ||
+    msg.includes('unavailable')
+  );
+}
 
 export const otpService = {
   sendCode: async (email) => {
     const normalized = sanitizeEmail(email);
     authLog.otp('Requesting OTP', normalized);
-    const res = await api.post('/auth/otp-send', { email: normalized });
-    return res.data;
+    try {
+      const res = await api.post('/auth/otp-send', { email: normalized });
+      return { ...res.data, method: 'otp' };
+    } catch (err) {
+      if (!isOtpServiceUnavailable(err.message || '')) throw err;
+      authLog.otp('OTP server unavailable — sending Firebase email link', normalized);
+      await sendEmailSignInLink(normalized);
+      return {
+        success: true,
+        method: 'link',
+        message: 'Sign-in link sent. Open your email and tap the link to continue.',
+        cooldownSeconds: 60,
+      };
+    }
   },
 
   verifyCode: async (email, code) => {

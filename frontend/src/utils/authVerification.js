@@ -28,6 +28,19 @@ export function hasEmailVerificationLink(search = '') {
   return mode === 'verifyEmail' && !!oobCode;
 }
 
+export function hasEmailSignInLink(search = '') {
+  const { mode, oobCode } = parseEmailActionFromUrl(search);
+  return mode === 'signIn' && !!oobCode;
+}
+
+export function getEmailSignInContinueUrl() {
+  if (typeof window === 'undefined') {
+    return 'https://www.campaignhubgh.com/login';
+  }
+  const { origin } = window.location;
+  return `${origin}/login`;
+}
+
 /** Where to send user after login/signup based on verification status. */
 export function resolvePostLoginPath(isVerified, intendedPath = '/dashboard') {
   if (!isVerified) return VERIFY_PATH;

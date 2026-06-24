@@ -18,7 +18,7 @@ export default function Login() {
   const { toast } = useToast();
   const from = location.state?.from?.pathname || '/dashboard';
 
-  const [mode, setMode] = useState('otp');
+  const [mode, setMode] = useState('password');
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -99,8 +99,8 @@ export default function Login() {
 
       <div className="flex rounded-xl bg-surface-elevated p-1 border border-surface-border">
         {[
-          { id: 'otp', label: 'Email code' },
           { id: 'password', label: 'Password' },
+          { id: 'otp', label: 'Email code' },
         ].map((tab) => (
           <button
             key={tab.id}

@@ -12,7 +12,7 @@ import AuthShell from '../components/AuthShell';
 export default function Signup() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [mode, setMode] = useState('otp');
+  const [mode, setMode] = useState('password');
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

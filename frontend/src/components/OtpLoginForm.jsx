@@ -9,6 +9,7 @@ const RESEND_SECONDS = 60;
 
 export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
   const [step, setStep] = useState('email');
+  const [delivery, setDelivery] = useState('otp');
   const [email, setEmail] = useState('');
   const [digits, setDigits] = useState(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
@@ -27,17 +28,16 @@ export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
     setLoading(true);
     try {
       const data = await otpService.sendCode(email);
-      setStep('verify');
+      const method = data?.method === 'link' ? 'link' : 'otp';
+      setDelivery(method);
+      setStep(method === 'link' ? 'link' : 'verify');
       setCooldown(data?.cooldownSeconds || data?.data?.cooldownSeconds || RESEND_SECONDS);
       setDigits(Array(OTP_LENGTH).fill(''));
-      setTimeout(() => inputRefs.current[0]?.focus(), 100);
-    } catch (err) {
-      const msg = err.message || 'Could not send code.';
-      if (msg.includes('OTP service') || msg.includes('OTP_ADMIN')) {
-        setError('Email login is being set up. Use Google sign-in for now, or try again shortly.');
-      } else {
-        setError(msg);
+      if (method === 'otp') {
+        setTimeout(() => inputRefs.current[0]?.focus(), 100);
       }
+    } catch (err) {
+      setError(err.message || 'Could not send code.');
     } finally {
       setLoading(false);
     }
@@ -135,13 +135,57 @@ export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
                 />
               </div>
               <p className="text-xs text-gray-500 mt-2">
-                We&apos;ll send a 6-digit code · expires in 5 minutes
+                {delivery === 'link'
+                  ? 'We\u2019ll email you a secure sign-in link'
+                  : 'We\u2019ll send a 6-digit code · expires in 5 minutes'}
               </p>
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
-              {loading ? 'Sending code…' : mode === 'signup' ? 'Send code & create account' : 'Send login code'}
+              {loading
+                ? 'Sending…'
+                : mode === 'signup'
+                  ? 'Continue with email'
+                  : 'Continue with email'}
             </button>
           </motion.form>
+        ) : step === 'link' ? (
+          <motion.div
+            key="link"
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            className="space-y-4"
+          >
+            <div className="p-4 bg-brand-500/10 border border-brand-500/20 rounded-xl text-center space-y-2">
+              <Mail className="w-8 h-8 text-brand-400 mx-auto" />
+              <p className="text-sm text-gray-300">
+                Sign-in link sent to <span className="text-white font-medium">{email}</span>
+              </p>
+              <p className="text-xs text-gray-500">
+                Open the email from Firebase and tap the link on this device. The page will sign you in automatically.
+              </p>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setStep('email');
+                  setError('');
+                }}
+                className="text-gray-500 hover:text-gray-300"
+              >
+                Change email
+              </button>
+              <button
+                type="button"
+                disabled={cooldown > 0 || loading}
+                onClick={sendCode}
+                className="text-brand-400 hover:text-brand-300 disabled:opacity-40"
+              >
+                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend link'}
+              </button>
+            </div>
+          </motion.div>
         ) : (
           <motion.div
             key="verify"

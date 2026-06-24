@@ -13,11 +13,14 @@ import {
   setPersistence,
   browserLocalPersistence,
   applyActionCode,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, resolveUserRole } from '../firebase/auth';
 import { getAuthErrorMessage } from '../utils/authErrors';
-import { getVerificationContinueUrl } from '../utils/authVerification';
+import { getVerificationContinueUrl, getEmailSignInContinueUrl } from '../utils/authVerification';
 import { saveAuthReturnPath } from '../utils/authRedirect';
 import { authLog } from '../utils/authLogger';
 import {
@@ -30,6 +33,8 @@ import {
 const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('email');
 googleProvider.addScope('profile');
+
+const EMAIL_FOR_SIGN_IN_KEY = 'campaignhub_email_for_sign_in';
 
 let redirectResultPromise = null;
 let persistenceSet = false;
@@ -250,6 +255,52 @@ export async function sendPasswordReset(email) {
   await sendPasswordResetEmail(auth, email.trim());
 }
 
+function clearEmailActionParamsFromUrl() {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete('mode');
+  url.searchParams.delete('oobCode');
+  url.searchParams.delete('apiKey');
+  url.searchParams.delete('lang');
+  window.history.replaceState({}, '', url.pathname + url.search);
+}
+
+/** Passwordless sign-in link (Firebase client — no server Admin SDK required). */
+export async function sendEmailSignInLink(email) {
+  const normalized = sanitizeEmail(email);
+  if (!normalized) throw new Error('Enter a valid email address.');
+  await sendSignInLinkToEmail(auth, normalized, {
+    url: getEmailSignInContinueUrl(),
+    handleCodeInApp: true,
+  });
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(EMAIL_FOR_SIGN_IN_KEY, normalized);
+  }
+  authLog.info('Email sign-in link sent', normalized);
+}
+
+export async function completeEmailLinkSignIn(url = '') {
+  const href = url || (typeof window !== 'undefined' ? window.location.href : '');
+  if (!href || !isSignInWithEmailLink(auth, href)) return null;
+
+  let email = typeof window !== 'undefined' ? window.localStorage.getItem(EMAIL_FOR_SIGN_IN_KEY) : null;
+  if (!email) {
+    throw new Error(
+      'Open the sign-in link on the same device and browser where you requested it, or use password login.'
+    );
+  }
+
+  authLog.info('Completing email link sign-in', email);
+  const credential = await signInWithEmailLink(auth, email, href);
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(EMAIL_FOR_SIGN_IN_KEY);
+  }
+  rememberAuthProvider('email');
+  const profile = await saveUserToFirestore(credential.user);
+  clearEmailActionParamsFromUrl();
+  return { user: credential.user, profile };
+}
+
 /** Send verification email with return URL to /verify-email */
 export async function sendVerificationEmail(user = auth.currentUser) {
   if (!user) throw new Error('No user signed in');
@@ -288,12 +339,7 @@ export async function handleEmailVerificationLink(search = '') {
   }
 
   if (typeof window !== 'undefined') {
-    const url = new URL(window.location.href);
-    url.searchParams.delete('mode');
-    url.searchParams.delete('oobCode');
-    url.searchParams.delete('apiKey');
-    url.searchParams.delete('lang');
-    window.history.replaceState({}, '', url.pathname + url.search);
+    clearEmailActionParamsFromUrl();
   }
 
   return true;

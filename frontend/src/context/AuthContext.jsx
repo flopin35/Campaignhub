@@ -7,6 +7,7 @@ import {
   refreshAuthUser,
   handleGoogleRedirectResult,
   saveUserToFirestore,
+  checkEmailVerificationStatus,
   isUserVerified,
 } from '../services/authService';
 import { useToast } from './ToastContext';
@@ -84,8 +85,8 @@ export function AuthProvider({ children }) {
 
     const interval = setInterval(async () => {
       try {
-        const updated = await refreshAuthUser();
-        if (updated?.emailVerified) {
+        const { verified, user: updated } = await checkEmailVerificationStatus();
+        if (verified && updated) {
           setUser(auth.currentUser);
           await loadProfile(updated);
         }

@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { loginWithEmail } from '../services/authService';
+import {
+  loginWithEmail,
+  isUserVerified,
+} from '../services/authService';
 import { getAuthErrorMessage } from '../utils/authErrors';
+import { resolvePostLoginPath } from '../utils/authVerification';
 import { useToast } from '../context/ToastContext';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 import OtpLoginForm from '../components/OtpLoginForm';
@@ -20,34 +24,30 @@ export default function Login() {
   const [error, setError] = useState('');
   const [successPulse, setSuccessPulse] = useState(false);
 
-  const finishLogin = (returnPath = from) => {
-    setSuccessPulse(true);
-    toast('Welcome back!', 'success');
-    setTimeout(() => navigate(returnPath, { replace: true }), 400);
-  };
-
-  const handleOtpSuccess = () => finishLogin(from);
-
-  const handleGoogleSuccess = ({ user }) => {
-    if (!user?.emailVerified && user?.providerData?.[0]?.providerId === 'password') {
-      navigate('/verify-email', { replace: true });
+  const goAfterLogin = (user, profile) => {
+    const verified = isUserVerified(user, profile);
+    const dest = resolvePostLoginPath(verified, from);
+    if (!verified) {
+      toast('Please verify your email to access your dashboard.', 'warning');
+      navigate(dest, { state: { from: location.state?.from }, replace: true });
       return;
     }
-    finishLogin(from);
+    setSuccessPulse(true);
+    toast('Welcome back!', 'success');
+    setTimeout(() => navigate(dest, { replace: true }), 400);
   };
+
+  const handleOtpSuccess = ({ user, profile }) => goAfterLogin(user, profile);
+
+  const handleGoogleSuccess = ({ user, profile }) => goAfterLogin(user, profile);
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const { user } = await loginWithEmail(form.email, form.password);
-      if (!user.emailVerified) {
-        navigate('/verify-email', { state: { from: location.state?.from }, replace: true });
-        toast('Please verify your email to access your dashboard.', 'warning');
-      } else {
-        finishLogin(from);
-      }
+      const { user, profile } = await loginWithEmail(form.email, form.password);
+      goAfterLogin(user, profile);
     } catch (err) {
       const msg = getAuthErrorMessage(err.code) || err.message;
       setError(msg);

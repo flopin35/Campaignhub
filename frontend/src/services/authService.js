@@ -12,10 +12,12 @@ import {
   updateProfile,
   setPersistence,
   browserLocalPersistence,
+  applyActionCode,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, resolveUserRole } from '../firebase/auth';
 import { getAuthErrorMessage } from '../utils/authErrors';
+import { getVerificationContinueUrl } from '../utils/authVerification';
 import { saveAuthReturnPath } from '../utils/authRedirect';
 import { authLog } from '../utils/authLogger';
 import {
@@ -132,7 +134,7 @@ export async function signUpWithEmail(name, email, password) {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   const { user } = credential;
   await updateProfile(user, { displayName: name });
-  await sendEmailVerification(user);
+  await sendVerificationEmail(user);
   rememberAuthProvider('email');
   const profile = await saveUserToFirestore(user, name);
   return { user, profile };
@@ -248,20 +250,78 @@ export async function sendPasswordReset(email) {
   await sendPasswordResetEmail(auth, email.trim());
 }
 
-export async function resendVerificationEmail() {
-  const user = auth.currentUser;
+/** Send verification email with return URL to /verify-email */
+export async function sendVerificationEmail(user = auth.currentUser) {
   if (!user) throw new Error('No user signed in');
   if (user.emailVerified) throw new Error('Email already verified');
-  await sendEmailVerification(user);
+  await sendEmailVerification(user, {
+    url: getVerificationContinueUrl(),
+    handleCodeInApp: true,
+  });
+  authLog.info('Verification email sent', user.email);
 }
 
+export async function resendVerificationEmail() {
+  return sendVerificationEmail();
+}
+
+/**
+ * Apply email verification link (oobCode from inbox link).
+ * Returns true if verification was applied.
+ */
+export async function handleEmailVerificationLink(search = '') {
+  const params = new URLSearchParams(search || (typeof window !== 'undefined' ? window.location.search : ''));
+  const mode = params.get('mode');
+  const oobCode = params.get('oobCode');
+
+  if (mode !== 'verifyEmail' || !oobCode) return false;
+
+  authLog.info('Applying email verification link');
+  await applyActionCode(auth, oobCode);
+
+  const user = auth.currentUser;
+  if (user) {
+    await user.reload();
+    await user.getIdToken(true);
+    await saveProfileSafe(auth.currentUser);
+    authLog.info('Email verified via link', user.email);
+  }
+
+  if (typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('mode');
+    url.searchParams.delete('oobCode');
+    url.searchParams.delete('apiKey');
+    url.searchParams.delete('lang');
+    window.history.replaceState({}, '', url.pathname + url.search);
+  }
+
+  return true;
+}
+
+/** Reload user, refresh JWT (for Firestore rules), sync profile. */
 export async function refreshAuthUser() {
   const user = auth.currentUser;
   if (!user) return null;
   await user.reload();
   const refreshed = auth.currentUser;
-  if (refreshed) await saveProfileSafe(refreshed);
+  if (refreshed) {
+    await refreshed.getIdToken(true);
+    await saveProfileSafe(refreshed);
+  }
   return refreshed;
+}
+
+/** Poll-friendly check — returns whether user is verified after reload. */
+export async function checkEmailVerificationStatus() {
+  const refreshed = await refreshAuthUser();
+  if (!refreshed) return { verified: false, user: null };
+  const profile = await getUserProfile(refreshed.uid);
+  return {
+    verified: isUserVerified(refreshed, profile),
+    user: refreshed,
+    profile,
+  };
 }
 
 export async function logout() {

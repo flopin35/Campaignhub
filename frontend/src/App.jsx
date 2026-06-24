@@ -9,6 +9,7 @@ import Footer from './components/Footer';
 import MobileNav from './components/MobileNav';
 
 import AIChatWidget from './components/AIChatWidget';
+import EmailVerificationHandler from './components/EmailVerificationHandler';
 
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -81,6 +82,8 @@ function App() {
 
   return (
 
+    <EmailVerificationHandler>
+
     <div className="flex flex-col min-h-screen">
 
       <Navbar />
@@ -137,6 +140,8 @@ function App() {
       <AIChatWidget />
 
     </div>
+
+    </EmailVerificationHandler>
 
   );
 

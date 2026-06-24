@@ -3,8 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { resendVerificationEmail } from '../services/authService';
-import AuthLoading from '../components/AuthLoading';
+import { resendVerificationEmail, checkEmailVerificationStatus } from '../services/authService';
+import { resolvePostLoginPath } from '../utils/authVerification';
+import AuthLoading from './AuthLoading';
 import { Mail, CheckCircle2 } from './icons/AppIcons';
 
 export default function VerifyEmailNotice({ compact = false, autoRedirect = !compact }) {
@@ -18,18 +19,18 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
   useEffect(() => {
     if (!autoRedirect || !isVerified) return;
     toast('Email verified! Welcome to CampaignHub.', 'success');
-    const dest = location.state?.from?.pathname || '/dashboard';
+    const dest = resolvePostLoginPath(true, location.state?.from?.pathname || '/dashboard');
     navigate(dest, { replace: true });
   }, [autoRedirect, isVerified, navigate, location.state?.from?.pathname, toast]);
 
   if (!user) return null;
-  if (user.emailVerified) return null;
+  if (isVerified) return null;
 
   const handleResend = async () => {
     setSending(true);
     try {
       await resendVerificationEmail();
-      toast('Verification email sent. Check your inbox.', 'success');
+      toast('Verification email sent. Check your inbox and spam folder.', 'success');
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -40,8 +41,9 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
   const handleCheck = async () => {
     setChecking(true);
     try {
-      const updated = await refreshUser();
-      if (updated?.emailVerified) {
+      const { verified } = await checkEmailVerificationStatus();
+      await refreshUser();
+      if (verified) {
         toast('Email verified! You now have full access.', 'success');
       } else {
         toast('Not verified yet. Click the link in your email, then try again.', 'warning');
@@ -83,7 +85,7 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
           </p>
 
           <ol className="text-xs text-gray-500 space-y-1 mb-4 list-decimal list-inside">
-            <li>Open the email from CampaignHub</li>
+            <li>Open the email from CampaignHub / Firebase</li>
             <li>Click the verification link</li>
             <li>Return here — we&apos;ll detect it automatically</li>
           </ol>
@@ -119,7 +121,14 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
 
 /** Full-page verify email route */
 export function VerifyEmailPage() {
-  const { user, loading } = useAuth();
+  const { user, loading, isVerified } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && isVerified) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [loading, isVerified, navigate]);
 
   if (loading) {
     return <AuthLoading message="Loading your account…" />;
@@ -132,6 +141,10 @@ export function VerifyEmailPage() {
         <Link to="/login" className="btn-primary text-sm">Sign in</Link>
       </div>
     );
+  }
+
+  if (isVerified) {
+    return <AuthLoading message="Email verified — opening dashboard…" />;
   }
 
   return (

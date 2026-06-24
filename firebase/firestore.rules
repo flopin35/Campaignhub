@@ -135,5 +135,59 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
       allow delete: if isAdmin();
     }
+
+    // WebCraft GH — website request submissions (NF project)
+    match /websiteRequests/{requestId} {
+      allow create: if isValidWebsiteRequest();
+      allow read: if isAdmin();
+      allow update: if isAdmin() && isWebsiteRequestAdminUpdateOnly();
+      allow delete: if false;
+    }
   }
+}
+
+function isValidWebsiteRequest() {
+  let data = request.resource.data;
+
+  return data.receiptId is string
+    && data.receiptId.matches('REQ-[0-9]{6}')
+    && data.status == 'Pending Review'
+    && data.customer.fullName is string
+    && data.customer.fullName.size() > 0
+    && data.customer.phone is string
+    && data.customer.phone.size() > 0
+    && data.customer.businessName is string
+    && data.customer.businessName.size() > 0
+    && data.template.id is string
+    && data.template.name is string
+    && data.template.price is number
+    && data.template.price >= 0
+    && data.deployment is bool
+    && data.selectedFeatures is list
+    && data.selectedUpgrades is list
+    && data.totalPrice is number
+    && data.totalPrice >= data.template.price
+    && data.pricing is map
+    && data.pricing.total is number
+    && data.pricing.total == data.totalPrice
+    && data.pricing.templatePrice == data.template.price
+    && data.notes is string;
+}
+
+function isWebsiteRequestAdminUpdateOnly() {
+  let incoming = request.resource.data;
+  let existing = resource.data;
+
+  return incoming.receiptId == existing.receiptId
+    && incoming.customer == existing.customer
+    && incoming.template == existing.template
+    && incoming.selectedFeatures == existing.selectedFeatures
+    && incoming.selectedUpgrades == existing.selectedUpgrades
+    && incoming.selectedBundle == existing.selectedBundle
+    && incoming.pricing == existing.pricing
+    && incoming.deployment == existing.deployment
+    && incoming.totalPrice == existing.totalPrice
+    && incoming.notes == existing.notes
+    && incoming.createdAt == existing.createdAt
+    && incoming.status is string;
 }

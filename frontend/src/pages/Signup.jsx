@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { signUpWithEmail } from '../services/authService';
+import { signUpWithEmail, isUserVerified } from '../services/authService';
 import { getAuthErrorMessage } from '../utils/authErrors';
+import { resolvePostLoginPath } from '../utils/authVerification';
 import { useToast } from '../context/ToastContext';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 import OtpLoginForm from '../components/OtpLoginForm';
@@ -17,18 +18,21 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [successPulse, setSuccessPulse] = useState(false);
 
-  const finishSignup = (isNew = true) => {
+  const finishSignup = (user, profile, isNew = true) => {
+    const verified = isUserVerified(user, profile);
+    if (!verified) {
+      toast('Account created! Check your email to verify.', 'success');
+      navigate('/verify-email', { replace: true });
+      return;
+    }
     setSuccessPulse(true);
     toast(isNew ? 'Welcome to CampaignHub!' : 'Welcome back!', 'success');
     setTimeout(() => navigate('/dashboard', { replace: true }), 450);
   };
 
-  const handleOtpSuccess = ({ isNewUser }) => finishSignup(isNewUser !== false);
+  const handleOtpSuccess = ({ user, profile, isNewUser }) => finishSignup(user, profile, isNewUser !== false);
 
-  const handleGoogleSuccess = ({ user }) => {
-    if (user?.emailVerified) finishSignup(true);
-    else navigate('/verify-email', { replace: true });
-  };
+  const handleGoogleSuccess = ({ user, profile }) => finishSignup(user, profile, true);
 
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
@@ -46,7 +50,6 @@ export default function Signup() {
     setLoading(true);
     try {
       await signUpWithEmail(form.name, form.email, form.password);
-      toast('Account created! Check your email to verify.', 'success');
       navigate('/verify-email', { replace: true });
     } catch (err) {
       const msg = getAuthErrorMessage(err.code) || err.message;

@@ -126,7 +126,15 @@ export default function Signup() {
       </div>
 
       {mode === 'otp' ? (
-        <OtpLoginForm onSuccess={handleOtpSuccess} mode="signup" />
+        <OtpLoginForm
+          onSuccess={handleOtpSuccess}
+          mode="signup"
+          onUsePassword={(otpEmail) => {
+            setMode('password');
+            setError('');
+            if (otpEmail) setForm((f) => ({ ...f, email: otpEmail }));
+          }}
+        />
       ) : (
         <form onSubmit={handlePasswordSubmit} className="space-y-4">
           <div>

@@ -38,7 +38,10 @@ export function getEmailSignInContinueUrl() {
     return 'https://www.campaignhubgh.com/login';
   }
   const { origin } = window.location;
-  return `${origin}/login`;
+  if (origin.includes('localhost')) {
+    return `${origin}/login`;
+  }
+  return 'https://www.campaignhubgh.com/login';
 }
 
 /** Where to send user after login/signup based on verification status. */

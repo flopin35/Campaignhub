@@ -26,7 +26,7 @@ export const otpService = {
       return {
         success: true,
         method: 'link',
-        message: 'Sign-in link sent. Open your email and tap the link to continue.',
+        message: 'Sign-in link sent. Open your email and tap the link on this device.',
         cooldownSeconds: 60,
       };
     }

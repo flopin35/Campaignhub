@@ -119,7 +119,15 @@ export default function Login() {
       </div>
 
       {mode === 'otp' ? (
-        <OtpLoginForm onSuccess={handleOtpSuccess} mode="login" />
+        <OtpLoginForm
+          onSuccess={handleOtpSuccess}
+          mode="login"
+          onUsePassword={(otpEmail) => {
+            setMode('password');
+            setError('');
+            if (otpEmail) setForm((f) => ({ ...f, email: otpEmail }));
+          }}
+        />
       ) : (
         <form onSubmit={handlePasswordSubmit} className="space-y-4">
           <div>

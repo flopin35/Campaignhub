@@ -7,7 +7,7 @@ import { Shield, Mail } from 'lucide-react';
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
 
-export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
+export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword }) {
   const [step, setStep] = useState('email');
   const [delivery, setDelivery] = useState('otp');
   const [email, setEmail] = useState('');
@@ -141,12 +141,17 @@ export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
               </p>
             </div>
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
-              {loading
-                ? 'Sending…'
-                : mode === 'signup'
-                  ? 'Continue with email'
-                  : 'Continue with email'}
+              {loading ? 'Sending…' : mode === 'signup' ? 'Continue with email' : 'Continue with email'}
             </button>
+            {onUsePassword && (
+              <button
+                type="button"
+                onClick={() => onUsePassword(email)}
+                className="w-full text-xs text-gray-500 hover:text-brand-400 transition-colors"
+              >
+                Prefer password? Switch to password sign-in
+              </button>
+            )}
           </motion.form>
         ) : step === 'link' ? (
           <motion.div
@@ -162,7 +167,7 @@ export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
                 Sign-in link sent to <span className="text-white font-medium">{email}</span>
               </p>
               <p className="text-xs text-gray-500">
-                Open the email from Firebase and tap the link on this device. The page will sign you in automatically.
+                Open the email and tap the link on this device. You&apos;ll be signed in automatically.
               </p>
             </div>
             <div className="flex items-center justify-between text-xs">
@@ -185,6 +190,15 @@ export default function OtpLoginForm({ onSuccess, mode = 'login' }) {
                 {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend link'}
               </button>
             </div>
+            {onUsePassword && (
+              <button
+                type="button"
+                onClick={() => onUsePassword(email)}
+                className="w-full text-xs text-gray-500 hover:text-brand-400 transition-colors"
+              >
+                Use password instead
+              </button>
+            )}
           </motion.div>
         ) : (
           <motion.div

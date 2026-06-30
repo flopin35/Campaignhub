@@ -29,7 +29,7 @@ const vars = {
   FIREBASE_PRIVATE_KEY: sa.private_key,
   FIREBASE_SERVICE_ACCOUNT: JSON.stringify(sa),
   OTP_SECRET: otpSecret,
-  OTP_EMAIL_FROM: 'CampaignHub <onboarding@resend.dev>',
+  OTP_EMAIL_FROM: 'CampaignHub <campaignhubgh@gmail.com>',
 };
 
 if (resendKey) vars.RESEND_API_KEY = resendKey;

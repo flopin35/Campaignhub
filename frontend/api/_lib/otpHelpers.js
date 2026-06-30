@@ -142,7 +142,7 @@ export async function sendOtpEmail(to, code) {
   }
 
   throw new Error(
-    'Email not configured. Set RESEND_API_KEY or SMTP_USER + SMTP_PASS on the server.'
+    'Email not configured. Add RESEND_API_KEY or Gmail SMTP (SMTP_USER + SMTP_PASS) on the server. For Gmail use an App Password, not your normal password.'
   );
 }
 

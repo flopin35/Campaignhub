@@ -73,6 +73,7 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   if (!isUserVerified(currentUser, profile)) {
     throw new Error('Please verify your email before launching a campaign.');
   }
+  await currentUser.getIdToken(true);
 
   let bannerImage;
   let logoUrl = '';
@@ -82,18 +83,18 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
 
     bannerImage = await uploadBanner(bannerFile, (pct) => {
       onUploadProgress?.(Math.round(pct * 0.45), 'Uploading banner…');
-    });
+    }, { skipCooldown: true });
 
     if (logoFile) {
       logoUrl = await uploadLogo(logoFile, (pct) => {
         onUploadProgress?.(45 + Math.round(pct * 0.15), 'Uploading logo…');
-      });
+      }, { skipCooldown: true });
     }
 
     if (galleryFiles?.length) {
       galleryImages = await uploadGalleryImages(galleryFiles, (pct) => {
         onUploadProgress?.(60 + Math.round(pct * 0.35), 'Uploading gallery…');
-      });
+      }, { skipCooldown: true });
     }
 
     onUploadProgress?.(98, 'Saving campaign…');

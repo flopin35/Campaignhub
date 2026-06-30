@@ -161,8 +161,10 @@ export async function signInWithOtpCustomToken(customToken) {
       'OTP sign-in'
     );
     rememberAuthProvider('otp');
+    await credential.user.reload();
+    await credential.user.getIdToken(true);
     const profile = await saveProfileSafe(credential.user, '', { provider: 'otp' });
-    return { user: credential.user, profile };
+    return { user: auth.currentUser, profile };
   } finally {
     releaseAuthLock();
   }

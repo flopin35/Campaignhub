@@ -123,7 +123,8 @@ export async function compressImageIfNeeded(file) {
   }
 }
 
-function enforceUploadCooldown() {
+function enforceUploadCooldown(skip = false) {
+  if (skip) return;
   const now = Date.now();
   if (now - lastUploadAt < UPLOAD_COOLDOWN_MS) {
     throw new StorageUploadError('Please wait a moment before uploading again.', 'storage/rate-limit');
@@ -169,7 +170,7 @@ function mapStorageError(err) {
  * @param {{ onProgress?: (percent: number) => void, label?: string }} options
  */
 export async function uploadToStorage(file, folder, options = {}) {
-  const { onProgress, label = 'image' } = options;
+  const { onProgress, label = 'image', skipCooldown = false } = options;
 
   if (!auth.currentUser) {
     throw new StorageUploadError(
@@ -186,7 +187,7 @@ export async function uploadToStorage(file, folder, options = {}) {
   }
 
   validateImageFile(file);
-  enforceUploadCooldown();
+  enforceUploadCooldown(skipCooldown);
 
   const prepared = await compressImageIfNeeded(file);
   validateImageFile(prepared);
@@ -257,15 +258,15 @@ export async function uploadToStorage(file, folder, options = {}) {
   });
 }
 
-export async function uploadBanner(file, onProgress) {
-  return uploadToStorage(file, STORAGE_FOLDERS.BANNERS, { onProgress, label: 'banner' });
+export async function uploadBanner(file, onProgress, options = {}) {
+  return uploadToStorage(file, STORAGE_FOLDERS.BANNERS, { onProgress, label: 'banner', ...options });
 }
 
-export async function uploadLogo(file, onProgress) {
-  return uploadToStorage(file, STORAGE_FOLDERS.LOGOS, { onProgress, label: 'logo' });
+export async function uploadLogo(file, onProgress, options = {}) {
+  return uploadToStorage(file, STORAGE_FOLDERS.LOGOS, { onProgress, label: 'logo', ...options });
 }
 
-export async function uploadGalleryImages(files, onProgress) {
+export async function uploadGalleryImages(files, onProgress, options = {}) {
   const list = Array.from(files || []);
   if (!list.length) return [];
 
@@ -275,6 +276,8 @@ export async function uploadGalleryImages(files, onProgress) {
   for (const file of list) {
     const url = await uploadToStorage(file, STORAGE_FOLDERS.GALLERY, {
       label: 'gallery',
+      skipCooldown: true,
+      ...options,
       onProgress: (pct) => {
         if (onProgress) {
           const overall = Math.round(((completed + pct / 100) / list.length) * 100);

@@ -12,7 +12,11 @@ service cloud.firestore {
     }
 
     function isVerifiedUser() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null && (
+        request.auth.token.email_verified == true
+        || request.auth.token.firebase.sign_in_provider == 'google.com'
+        || request.auth.token.firebase.sign_in_provider == 'custom'
+      );
     }
 
     function isPublicActiveCampaign() {
@@ -70,7 +74,7 @@ service cloud.firestore {
         || isAdmin();
       allow create: if isVerifiedUser()
         && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.status == 'payment_pending'
+        && request.resource.data.status in ['payment_pending', 'pending_review']
         && request.resource.data.views == 0
         && request.resource.data.shares == 0
         && request.resource.data.clicks == 0;

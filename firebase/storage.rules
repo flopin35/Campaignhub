@@ -4,7 +4,11 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     function isVerifiedUser() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null && (
+        request.auth.token.email_verified == true
+        || request.auth.token.firebase.sign_in_provider == 'google.com'
+        || request.auth.token.firebase.sign_in_provider == 'custom'
+      );
     }
 
     function isImage() {

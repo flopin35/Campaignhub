@@ -3,7 +3,7 @@
  * Usage: node scripts/smoke-test-production.mjs
  */
 const BASE = 'https://www.campaignhubgh.com';
-const API_KEY = 'AIzaSyDaU9ckYnWCiQktFl0v0klqZqawHK_FeGU';
+const API_KEY = 'AIzaSyDgq9q4FQf0Mv8_l5njSQKOmAFlpEEl2gk';
 
 let passed = 0;
 let failed = 0;

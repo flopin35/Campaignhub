@@ -19,7 +19,7 @@ if (!jsonPath || !existsSync(jsonPath)) {
   console.error('Usage: node scripts/setup-otp-vercel.mjs <serviceAccount.json> [RESEND_API_KEY]');
   console.error('\n6-digit email codes need Firebase Admin + an email provider on Vercel.');
   console.error('\n1. Download service account JSON:');
-  console.error('   https://console.firebase.google.com/project/campaign-hub-b33c6/settings/serviceaccounts/adminsdk');
+  console.error('   https://console.firebase.google.com/project/new1-e94db/settings/serviceaccounts/adminsdk');
   console.error('   → Generate new private key → save the .json file');
   console.error('\n2. Get a free Resend API key: https://resend.com/api-keys');
   console.error('\n3. Run:');

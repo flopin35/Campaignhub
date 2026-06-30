@@ -30,7 +30,7 @@ export async function getFirebaseAdmin() {
     fromJson?.projectId ||
     process.env.FIREBASE_PROJECT_ID ||
     process.env.VITE_FIREBASE_PROJECT_ID ||
-    'campaign-hub-b33c6';
+    'new1-e94db';
   const clientEmail = fromJson?.clientEmail || process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = parsePrivateKey(fromJson?.privateKey || process.env.FIREBASE_PRIVATE_KEY);
 

@@ -42,7 +42,7 @@ CampaignHub/
 
 - Node.js 18+
 - Python 3.10+
-- Firebase project `campaign-hub-b33c6`
+- Firebase project `new1-e94db`
 
 ### 1. Firebase
 
@@ -51,7 +51,7 @@ CampaignHub/
 
 ```bash
 cd firebase
-firebase deploy --only firestore:rules,storage --project campaign-hub-b33c6
+firebase deploy --only firestore:rules,storage --project new1-e94db
 ```
 
 ### 2. Frontend (required)

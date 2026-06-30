@@ -9,7 +9,7 @@ const { configstore } = require('firebase-tools/lib/configstore');
 const { getAccessToken } = require('firebase-tools/lib/auth');
 const scopes = require('firebase-tools/lib/scopes');
 
-const PROJECT_ID = 'campaign-hub-b33c6';
+const PROJECT_ID = 'new1-e94db';
 
 const DEFAULT_DOMAINS = [
   'www.campaignhubgh.com',

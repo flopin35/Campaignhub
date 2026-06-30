@@ -11,13 +11,13 @@ const { configstore } = require('firebase-tools/lib/configstore');
 const { getAccessToken } = require('firebase-tools/lib/auth');
 const scopes = require('firebase-tools/lib/scopes');
 
-const PROJECT_ID = 'campaign-hub-b33c6';
+const PROJECT_ID = 'new1-e94db';
 
 const DOMAINS = [
   'localhost',
   'campaignhubgh.com',
   'www.campaignhubgh.com',
-  'campaign-hub-b33c6.firebaseapp.com',
+  'new1-e94db.firebaseapp.com',
   'campaignhub-three.vercel.app',
   'frontend-sage-delta-25.vercel.app',
 ];

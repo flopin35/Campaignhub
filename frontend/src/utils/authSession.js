@@ -1,4 +1,4 @@
-import { authLog } from './authLogger';
+import { authLog } from './authLogger.js';
 
 const AUTH_LOCK_KEY = 'campaignhub.auth.lock';
 const LAST_PROVIDER_KEY = 'campaignhub.auth.lastProvider';

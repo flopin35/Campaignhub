@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:auth": "node scripts/test-auth-logic.mjs && node scripts/test-email-verification.mjs",
+    "test:smoke": "node scripts/smoke-test-production.mjs",
+    "test:ai": "node scripts/test-production-ai.mjs"
   },
   "dependencies": {
     "axios": "^1.7.9",

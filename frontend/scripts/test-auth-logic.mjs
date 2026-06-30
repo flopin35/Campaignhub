@@ -1,7 +1,7 @@
 /**
  * Real-user auth flow unit tests (logic only, no Firebase calls)
  */
-import { isMobileDevice, shouldUseGoogleRedirect, sanitizeEmail, isUserVerified } from '../src/services/authService.js';
+import { isMobileDevice, isUserVerified, sanitizeEmail, shouldUseGoogleRedirect } from '../src/utils/authUser.js';
 import { acquireAuthLock, releaseAuthLock } from '../src/utils/authSession.js';
 import { saveAuthReturnPath, consumeAuthReturnPath } from '../src/utils/authRedirect.js';
 
@@ -23,21 +23,25 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg || 'Assertion failed');
 }
 
+function mockNavigator(ua) {
+  Object.defineProperty(global, 'navigator', {
+    value: { userAgent: ua },
+    configurable: true,
+  });
+}
+
 // --- Mobile detection ---
 test('desktop UA should not force redirect', () => {
   global.window = { innerWidth: 1280, ontouchstart: undefined };
-  const orig = global.navigator;
-  global.navigator = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' };
+  mockNavigator('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120');
+  assert(!isMobileDevice(), 'desktop should not be mobile');
   assert(!shouldUseGoogleRedirect(), 'desktop should use popup');
-  global.navigator = orig;
 });
 
 test('iPhone UA should use redirect', () => {
   global.window = { innerWidth: 390, ontouchstart: () => {} };
-  const orig = global.navigator;
-  global.navigator = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' };
+  mockNavigator('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15');
   assert(shouldUseGoogleRedirect(), 'mobile should redirect');
-  global.navigator = orig;
 });
 
 // --- Email sanitize ---

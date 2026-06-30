@@ -21,6 +21,14 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { auth, db, resolveUserRole } from '../firebase/auth';
 import { getAuthErrorMessage } from '../utils/authErrors';
 import { getVerificationContinueUrl, getEmailSignInContinueUrl } from '../utils/authVerification';
+import {
+  isMobileDevice,
+  shouldUseGoogleRedirect,
+  isGoogleUser,
+  isOtpUser,
+  isUserVerified,
+  sanitizeEmail,
+} from '../utils/authUser';
 import { saveAuthReturnPath } from '../utils/authRedirect';
 import { authLog } from '../utils/authLogger';
 import {
@@ -29,6 +37,8 @@ import {
   rememberAuthProvider,
   withAuthTimeout,
 } from '../utils/authSession';
+
+export { isMobileDevice, shouldUseGoogleRedirect, isGoogleUser, isOtpUser, isUserVerified, sanitizeEmail };
 
 const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope('email');
@@ -55,20 +65,6 @@ async function ensureLocalPersistence() {
   await setPersistence(auth, browserLocalPersistence);
   persistenceSet = true;
   authLog.session('Local persistence enabled');
-}
-
-export function isMobileDevice() {
-  if (typeof window === 'undefined') return false;
-  const ua = navigator.userAgent;
-  return (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
-    (window.innerWidth < 768 && 'ontouchstart' in window)
-  );
-}
-
-/** Desktop = popup. Mobile = redirect only. */
-export function shouldUseGoogleRedirect() {
-  return isMobileDevice();
 }
 
 function getProviderFromUser(user) {
@@ -374,24 +370,4 @@ export async function logout() {
   authLog.session('Signing out');
   await signOut(auth);
   redirectResultPromise = null;
-}
-
-export function isGoogleUser(user, profile) {
-  if (profile?.provider === 'google') return true;
-  return user?.providerData?.some((p) => p.providerId === 'google.com') ?? false;
-}
-
-export function isOtpUser(user, profile) {
-  if (profile?.provider === 'otp') return true;
-  return user?.providerData?.some((p) => p.providerId === 'custom') ?? false;
-}
-
-export function isUserVerified(user, profile) {
-  if (!user) return false;
-  if (isGoogleUser(user, profile) || isOtpUser(user, profile)) return true;
-  return user.emailVerified === true;
-}
-
-export function sanitizeEmail(email) {
-  return (email || '').trim().toLowerCase();
 }

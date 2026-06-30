@@ -4,27 +4,19 @@
  * Usage:
  *   node scripts/setup-otp-vercel.mjs path/to/serviceAccount.json
  *   node scripts/setup-otp-vercel.mjs path/to/serviceAccount.json re_your_resend_key
- *
- * Get service account JSON:
- *   Firebase Console → Project Settings → Service accounts → Generate new private key
  */
 import { readFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { randomBytes } from 'crypto';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 const jsonPath = process.argv[2];
 const resendKey = process.argv[3];
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 if (!jsonPath || !existsSync(jsonPath)) {
   console.error('Usage: node scripts/setup-otp-vercel.mjs <serviceAccount.json> [RESEND_API_KEY]');
-  console.error('\n6-digit email codes need Firebase Admin + an email provider on Vercel.');
-  console.error('\n1. Download service account JSON:');
-  console.error('   https://console.firebase.google.com/project/new1-e94db/settings/serviceaccounts/adminsdk');
-  console.error('   → Generate new private key → save the .json file');
-  console.error('\n2. Get a free Resend API key: https://resend.com/api-keys');
-  console.error('\n3. Run:');
-  console.error('   node scripts/setup-otp-vercel.mjs C:\\path\\to\\serviceAccount.json re_your_key');
-  console.error('\n4. Redeploy: npx vercel --prod');
   process.exit(1);
 }
 
@@ -35,6 +27,7 @@ const vars = {
   FIREBASE_PROJECT_ID: sa.project_id,
   FIREBASE_CLIENT_EMAIL: sa.client_email,
   FIREBASE_PRIVATE_KEY: sa.private_key,
+  FIREBASE_SERVICE_ACCOUNT: JSON.stringify(sa),
   OTP_SECRET: otpSecret,
   OTP_EMAIL_FROM: 'CampaignHub <onboarding@resend.dev>',
 };
@@ -45,12 +38,10 @@ console.log('Setting Vercel production env vars for campaignhub...\n');
 
 for (const [key, value] of Object.entries(vars)) {
   try {
-    const input = typeof value === 'string' ? value : JSON.stringify(value);
     execSync(`npx vercel env add ${key} production --force`, {
-      input,
-      cwd: new URL('..', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'),
+      input: String(value),
+      cwd: root,
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true,
     });
     console.log(`✓ ${key}`);
   } catch (err) {
@@ -59,4 +50,7 @@ for (const [key, value] of Object.entries(vars)) {
 }
 
 console.log('\nDone. Redeploy: npx vercel --prod');
-console.log('Resend free tier: verify your domain or use onboarding@resend.dev for testing.');
+if (!resendKey) {
+  console.log('\n⚠ No RESEND_API_KEY — add one for emails to send:');
+  console.log('  node scripts/setup-otp-vercel.mjs <json> re_your_key');
+}

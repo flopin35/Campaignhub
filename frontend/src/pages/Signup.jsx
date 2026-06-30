@@ -106,7 +106,7 @@ export default function Signup() {
 
       <div className="flex rounded-xl bg-surface-elevated p-1 border border-surface-border">
         {[
-          { id: 'otp', label: 'Email code' },
+          { id: 'otp', label: '6-digit code' },
           { id: 'password', label: 'Password' },
         ].map((tab) => (
           <button

@@ -19,8 +19,11 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const message = error.response?.data?.message || error.message || 'Something went wrong';
-    return Promise.reject(new Error(message));
+    const data = error.response?.data || {};
+    const message = data.message || error.message || 'Something went wrong';
+    const err = new Error(message);
+    if (data.code) err.code = data.code;
+    return Promise.reject(err);
   }
 );
 

@@ -1,10 +1,11 @@
 import api from './api';
-import { signInWithOtpCustomToken, sanitizeEmail, sendEmailSignInLink } from './authService';
+import { signInWithOtpCustomToken, sanitizeEmail } from './authService';
 import { authLog } from '../utils/authLogger';
 
-function isOtpServiceUnavailable(message = '') {
+function isOtpServiceUnavailable(message = '', code = '') {
   const msg = message.toLowerCase();
   return (
+    code === 'OTP_ADMIN_MISSING' ||
     msg.includes('otp service') ||
     msg.includes('otp_admin') ||
     msg.includes('starting up') ||
@@ -15,20 +16,17 @@ function isOtpServiceUnavailable(message = '') {
 export const otpService = {
   sendCode: async (email) => {
     const normalized = sanitizeEmail(email);
-    authLog.otp('Requesting OTP', normalized);
+    authLog.otp('Requesting 6-digit OTP', normalized);
     try {
       const res = await api.post('/auth/otp-send', { email: normalized });
       return { ...res.data, method: 'otp' };
     } catch (err) {
-      if (!isOtpServiceUnavailable(err.message || '')) throw err;
-      authLog.otp('OTP server unavailable — sending Firebase email link', normalized);
-      await sendEmailSignInLink(normalized);
-      return {
-        success: true,
-        method: 'link',
-        message: 'Sign-in link sent. Open your email and tap the link on this device.',
-        cooldownSeconds: 60,
-      };
+      if (!isOtpServiceUnavailable(err.message || '', err.code || '')) throw err;
+      const unavailable = new Error(
+        '6-digit email codes are not enabled on the server yet. Use Password or Google sign-in, or ask the admin to add Firebase credentials to Vercel.'
+      );
+      unavailable.code = 'OTP_UNAVAILABLE';
+      throw unavailable;
     }
   },
 

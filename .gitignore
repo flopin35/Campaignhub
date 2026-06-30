@@ -4,6 +4,10 @@
 .env.*.local
 !.env.example
 
+# Firebase service account keys — never commit
+*firebase-adminsdk*.json
+*serviceAccount*.json
+
 # Python
 *.py[cod]
 __pycache__/

@@ -47,6 +47,11 @@ export default function CampaignCard({ campaign, index = 0, showViews = true, sh
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={getStatusBadgeClass(campaign.status)}>{getStatusLabel(campaign.status)}</span>
                 <VerificationBadge verified={campaign.verified} />
+                {campaign.verificationRequested && !campaign.verified && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                    Authorization pending
+                  </span>
+                )}
                 {campaign.paymentVerified && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
                     Payment confirmed

@@ -6,11 +6,13 @@ import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import VerifyEmailNotice from './VerifyEmailNotice';
 
+import { BRAND } from '../data/brand';
+
 const navLinks = [
   { to: '/', label: 'Home' },
-  { to: '/campaigns', label: 'Campaigns' },
-  { to: '/premium', label: 'Premium' },
-  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/campaigns', label: 'Directory' },
+  { to: '/premium', label: 'Verification & Hosting' },
+  { to: '/dashboard', label: 'My Campaign Pages' },
 ];
 
 export default function Navbar() {
@@ -37,7 +39,7 @@ export default function Navbar() {
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-500 flex items-center justify-center text-white font-bold text-sm shadow-glow-sm group-hover:shadow-glow transition-shadow">
               CH
             </div>
-            <span className="font-bold text-lg text-white hidden xs:inline">CampaignHub</span>
+            <span className="font-bold text-lg text-white hidden xs:inline">{BRAND.name}</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-1">
@@ -80,7 +82,7 @@ export default function Navbar() {
                 <NotificationBell />
                 {isVerified && (
                   <Link to="/upload" className="btn-primary text-sm py-2 px-4 hidden sm:inline-flex">
-                    Launch
+                    Launch Page
                   </Link>
                 )}
                 <button onClick={handleLogout} className="btn-secondary text-sm py-2 px-3 hidden sm:inline-flex">
@@ -93,7 +95,7 @@ export default function Navbar() {
                   Sign In
                 </Link>
                 <Link to="/signup" className="btn-primary text-sm py-2 px-4">
-                  Get Started
+                  Sign Up
                 </Link>
               </>
             )}
@@ -101,7 +103,7 @@ export default function Navbar() {
             <button
               type="button"
               onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-surface-elevated"
+              className="md:hidden touch-target p-2 rounded-lg text-gray-400 hover:text-white hover:bg-surface-elevated touch-manipulation"
               aria-label="Menu"
             >
               {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -120,7 +122,7 @@ export default function Navbar() {
                 key={link.to}
                 to={link.to}
                 onClick={() => setMenuOpen(false)}
-                className="block px-4 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-surface-elevated"
+                className="block px-4 py-3.5 min-h-[44px] rounded-xl text-sm font-medium text-gray-300 hover:bg-surface-elevated touch-manipulation"
               >
                 {link.label}
               </Link>

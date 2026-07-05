@@ -55,6 +55,8 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 
 const CampaignPerformance = lazy(() => import('./pages/CampaignPerformance'));
 
+const CampaignCommandCenter = lazy(() => import('./pages/CampaignCommandCenter'));
+
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 
 const Premium = lazy(() => import('./pages/Premium'));
@@ -122,6 +124,8 @@ function App() {
             <Route path="/notifications" element={<ProtectedVerifiedRoute><NotificationsPage /></ProtectedVerifiedRoute>} />
 
             <Route path="/campaign/:slug/performance" element={<ProtectedVerifiedRoute><CampaignPerformance /></ProtectedVerifiedRoute>} />
+
+            <Route path="/campaign/:slug/command" element={<ProtectedVerifiedRoute><CampaignCommandCenter /></ProtectedVerifiedRoute>} />
 
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 

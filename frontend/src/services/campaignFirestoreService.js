@@ -16,9 +16,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { generateSlug, appendSlugSuffix } from '../utils/slugGenerator';
-import { normalizeCampaign, addDays, toDate } from '../utils/campaignHelpers';
+import { normalizeCampaign, addDays, toDate, sortCampaignsForDisplay } from '../utils/campaignHelpers';
 import { uploadBanner, uploadGalleryImages, uploadLogo } from './storageService';
-import { auth } from '../firebase/auth';
+import { auth, isAdmin } from '../firebase/auth';
 import { isUserVerified, getUserProfile } from './authService';
 
 const CAMPAIGNS = 'campaigns';
@@ -61,7 +61,7 @@ export async function expireOverdueCampaigns(campaigns) {
 }
 
 /**
- * Create campaign with package — status payment_pending until proof uploaded.
+ * Create campaign — free packages go live immediately; paid await payment proof.
  */
 export async function createCampaign({ form, bannerFile, logoFile, galleryFiles, ownerId, ownerName, ownerEmail, pkg, onUploadProgress }) {
   if (!bannerFile) throw new Error('Banner image is required');
@@ -71,7 +71,7 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   if (!currentUser) throw new Error('You must be signed in to create a campaign');
   const profile = await getUserProfile(currentUser.uid);
   if (!isUserVerified(currentUser, profile)) {
-    throw new Error('Please verify your email before launching a campaign.');
+    throw new Error('Please sign in again before launching a campaign.');
   }
   await currentUser.getIdToken(true);
 
@@ -108,6 +108,9 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   }
 
   const slug = resolveUniqueSlug(form.title);
+  const isFree = pkg.price === 0 || pkg.id === 'free';
+  const start = isFree ? new Date() : null;
+  const end = isFree ? addDays(start, pkg.durationDays || 14) : null;
 
   const socialLinks = {
     facebook: form.socialFacebook?.trim() || '',
@@ -148,10 +151,10 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
     clicks: 0,
     durationDays: pkg.durationDays,
     duration: pkg.durationDays,
-    status: pkg.price === 0 || pkg.id === 'free' ? 'pending_review' : 'payment_pending',
-    startDate: null,
-    endDate: null,
-    expiresAt: null,
+    status: isFree ? 'active' : 'payment_pending',
+    startDate: isFree ? Timestamp.fromDate(start) : null,
+    endDate: isFree ? Timestamp.fromDate(end) : null,
+    expiresAt: isFree ? Timestamp.fromDate(end) : null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -159,6 +162,16 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   try {
     const docRef = await addDoc(collection(db, CAMPAIGNS), campaignData);
     onUploadProgress?.(100, 'Campaign saved');
+
+    try {
+      await updateDoc(doc(db, 'users', ownerId), {
+        campaignsCreated: increment(1),
+        updatedAt: serverTimestamp(),
+      });
+    } catch {
+      /* profile counter is optional */
+    }
+
     return { id: docRef.id, ...campaignData, slug };
   } catch (err) {
     if (err.code === 'permission-denied') {
@@ -172,7 +185,11 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
  * Get campaign by slug.
  */
 export async function getCampaignBySlug(slug) {
-  const q = query(collection(db, CAMPAIGNS), where('slug', '==', slug));
+  const q = query(
+    collection(db, CAMPAIGNS),
+    where('slug', '==', slug),
+    where('status', '==', 'active')
+  );
   const snap = await getDocs(q);
   if (snap.empty) return null;
   return normalizeCampaign(snap.docs[0]);
@@ -189,12 +206,6 @@ export async function fetchCampaigns({ status, featured, category, search, sort 
   if (featured) constraints.push(where('featured', '==', true));
   if (category) constraints.push(where('category', '==', category));
 
-  if (sort === 'trending') {
-    constraints.push(orderBy('views', 'desc'));
-  } else {
-    constraints.push(orderBy('createdAt', 'desc'));
-  }
-
   const snap = await getDocs(query(q, ...constraints));
   let campaigns = snap.docs.map(normalizeCampaign);
 
@@ -205,6 +216,12 @@ export async function fetchCampaigns({ status, featured, category, search, sort 
   // Filter active only for public (hide expired even if status not yet updated)
   if (status === 'active') {
     campaigns = campaigns.filter((c) => c.status === 'active' && !c.isExpired);
+  }
+
+  if (sort === 'trending') {
+    campaigns = [...campaigns].sort((a, b) => (b.views || 0) - (a.views || 0));
+  } else {
+    campaigns = sortCampaignsForDisplay(campaigns);
   }
 
   if (search) {
@@ -246,7 +263,25 @@ export async function rejectCampaign(campaignId, reason = '') {
 }
 
 export async function deleteCampaign(campaignId) {
-  await deleteDoc(doc(db, CAMPAIGNS, campaignId));
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('You must be signed in to delete a campaign');
+
+  const ref = doc(db, CAMPAIGNS, campaignId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Campaign not found');
+  const isOwner = snap.data().ownerId === currentUser.uid;
+  if (!isOwner && !isAdmin(currentUser)) {
+    throw new Error('You can only delete your own campaigns');
+  }
+
+  try {
+    await deleteDoc(ref);
+  } catch (err) {
+    if (err.code === 'permission-denied') {
+      throw new Error('Permission denied — you cannot delete this campaign.');
+    }
+    throw err;
+  }
 }
 
 export async function extendCampaign(campaignId, additionalDays, currentEndDate, currentDurationDays = 0) {

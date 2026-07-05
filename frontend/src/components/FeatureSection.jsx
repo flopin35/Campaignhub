@@ -1,26 +1,26 @@
 import { motion } from 'framer-motion';
-import { QrCode, BarChart3, Shield, Smartphone } from 'lucide-react';
+import { QrCode, Link2, Shield, Smartphone } from 'lucide-react';
 
 const features = [
   {
-    icon: QrCode,
-    title: 'Share anywhere',
-    description: 'Every campaign gets a link and QR code — posters, WhatsApp, events, and social.',
+    icon: Link2,
+    title: 'One official URL',
+    description: 'Every campaign gets a permanent link voters, media, and supporters can trust and return to.',
   },
   {
-    icon: BarChart3,
-    title: 'Real analytics',
-    description: 'Track views, shares, and QR scans live. No fake numbers — all from Firestore.',
+    icon: QrCode,
+    title: 'QR for posters',
+    description: 'Download a QR code for flyers, billboards, and rally materials — scan to reach your official page.',
   },
   {
     icon: Shield,
-    title: 'Trusted approvals',
-    description: 'Admin-verified campaigns and payment proof. Built to reduce scams and build confidence.',
+    title: 'Admin verification',
+    description: 'Optional admin verification helps citizens distinguish official campaign pages from impersonators.',
   },
   {
     icon: Smartphone,
-    title: 'Mobile-first',
-    description: 'Designed for Android and iPhone — fast, touch-friendly, lightweight on low-end devices.',
+    title: 'WhatsApp-ready',
+    description: 'Share in one tap. Built for how Ghana campaigns actually reach people — mobile-first.',
   },
 ];
 
@@ -34,9 +34,9 @@ export default function FeatureSection() {
           viewport={{ once: true }}
           className="mb-14"
         >
-          <h2 className="section-title">Solve real advertising pain points</h2>
+          <h2 className="section-title">Everything a campaign page needs</h2>
           <p className="section-subtitle">
-            Billboards are expensive with no tracking. Social media is slow and untrusted. CampaignHub gives you speed, visibility, and proof.
+            Not an operating system. Not a marketplace. A clear, trusted public home for your political campaign.
           </p>
         </motion.div>
 

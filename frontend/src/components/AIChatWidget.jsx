@@ -2,7 +2,11 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { aiService } from '../services/aiService';
-import { MessageCircle, X } from './icons/AppIcons';
+import { MessageCircle, X, Lock } from './icons/AppIcons';
+import { useDashboardCampaign } from '../context/DashboardCampaignContext';
+import { usePremiumModal } from '../context/PremiumModalContext';
+import { canUseDashboardAi } from '../utils/featureAccess';
+import { PREMIUM_FEATURE_IDS } from '../data/premiumPackages';
 
 function isDashboardPage(path) {
   return (
@@ -14,12 +18,16 @@ function isDashboardPage(path) {
 
 export default function AIChatWidget({ context = {} }) {
   const location = useLocation();
+  const { campaign: dashboardCampaign } = useDashboardCampaign();
+  const { openPremiumModal } = usePremiumModal();
   const dashboardMode = isDashboardPage(location.pathname);
+  const onUploadPage = location.pathname.startsWith('/upload');
+  const dashboardAiLocked = dashboardMode && !canUseDashboardAi(dashboardCampaign);
 
   const welcome = useMemo(
     () =>
       dashboardMode
-        ? "Hi! I'm your Dashboard AI — powered by GPT. Ask about analytics, campaign performance, or what to do next."
+        ? "Hi! I'm your Campaign Page AI — powered by GPT. Ask about page stats, your campaign message, or what to update next."
         : "Hi! I'm your Content AI — powered by Gemini. Ask for captions, slogans, hashtags, or help polishing your campaign copy.",
     [dashboardMode]
   );
@@ -27,7 +35,7 @@ export default function AIChatWidget({ context = {} }) {
   const loadingLabels = useMemo(
     () =>
       dashboardMode
-        ? ['Analyzing dashboard…', 'Reviewing performance…', 'Preparing advice…']
+        ? ['Reviewing your page…', 'Checking page stats…', 'Preparing advice…']
         : ['Crafting copy…', 'Polishing content…', 'Almost ready…'],
     [dashboardMode]
   );
@@ -94,7 +102,7 @@ export default function AIChatWidget({ context = {} }) {
         ...prev,
         {
           role: 'assistant',
-          content: 'Something went wrong. Please try again or visit the Upload page to get started.',
+          content: 'Something went wrong. Please try again or visit the Upload page to launch your campaign page.',
         },
       ]);
     } finally {
@@ -103,8 +111,21 @@ export default function AIChatWidget({ context = {} }) {
   };
 
   const badge = dashboardMode
-    ? { label: 'GPT', sub: 'Dashboard AI', color: 'emerald' }
+    ? { label: 'GPT', sub: 'Campaign Page AI', color: 'emerald' }
     : { label: 'G', sub: 'Content AI', color: 'blue' };
+
+  const handleFabClick = () => {
+    if (dashboardAiLocked) {
+      openPremiumModal({
+        campaign: dashboardCampaign,
+        planId: PREMIUM_FEATURE_IDS.PREMIUM_SUBSCRIPTION,
+      });
+      return;
+    }
+    setIsOpen(!isOpen);
+  };
+
+  if (onUploadPage) return null;
 
   return (
     <>
@@ -201,7 +222,7 @@ export default function AIChatWidget({ context = {} }) {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
-                    dashboardMode ? 'Ask about analytics or campaign management…' : 'Ask for captions, slogans, or copy…'
+                    dashboardMode ? 'Ask about page stats or your campaign message…' : 'Ask for captions, slogans, or copy…'
                   }
                   className="input-field text-sm py-2.5 flex-1"
                   disabled={loading}
@@ -222,11 +243,15 @@ export default function AIChatWidget({ context = {} }) {
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-brand-600 hover:bg-brand-500 text-white rounded-full shadow-lg shadow-brand-600/30 flex items-center justify-center transition-colors text-xl"
-        aria-label={isOpen ? 'Close AI chat' : 'Open AI chat'}
+        onClick={handleFabClick}
+        className={`fixed bottom-6 right-6 z-50 w-14 h-14 text-white rounded-full shadow-lg flex items-center justify-center transition-colors text-xl ${
+          dashboardAiLocked
+            ? 'bg-surface-elevated border border-brand-500/30 hover:bg-brand-600/20'
+            : 'bg-brand-600 hover:bg-brand-500 shadow-brand-600/30'
+        }`}
+        aria-label={dashboardAiLocked ? 'Upgrade for Campaign Page AI' : isOpen ? 'Close AI chat' : 'Open AI chat'}
       >
-        {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+        {dashboardAiLocked ? <Lock className="w-6 h-6 text-brand-400" /> : isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
       </motion.button>
     </>
   );

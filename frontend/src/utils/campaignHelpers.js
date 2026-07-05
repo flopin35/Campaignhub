@@ -38,8 +38,9 @@ export function normalizeCampaign(docSnap) {
     extensionPending: data.extensionPending || false,
     featured: data.featured || false,
     spotlight: data.spotlight || false,
-    verified: data.verified || data.paymentVerified || false,
+    verified: !!data.verified,
     paymentVerified: data.paymentVerified || false,
+    verificationRequested: data.verificationRequested || false,
     packageType: data.packageType || '',
     packageName: data.packageName || '',
     packagePrice: data.packagePrice || data.amount || null,
@@ -137,15 +138,23 @@ export function isCampaignVisible(campaign) {
   return campaign.status === 'active' && !campaign.isExpired && !campaign.disabled;
 }
 
-export const CAMPAIGN_TYPES = ['Political', 'Business', 'Awareness', 'Event'];
+/** Office level for political campaigns (stored in campaignType) */
+export const OFFICE_LEVELS = ['Presidential', 'Parliamentary', 'MMDCE', 'Party', 'Referendum'];
 
+/** @deprecated use OFFICE_LEVELS — kept for legacy Firestore docs */
+export const CAMPAIGN_TYPES = OFFICE_LEVELS;
+
+/** Primary category for new political uploads */
+export const POLITICS_CATEGORY = 'Politics';
+
+/** Directory filters — Politics-first; legacy values kept for older Firestore documents */
 export const CATEGORIES = [
   'Politics',
-  'Business',
   'NGO',
   'Events',
   'Education',
   'Religion',
-  'Entertainment',
   'General',
 ];
+
+export const DIRECTORY_OFFICE_FILTERS = ['', ...OFFICE_LEVELS];

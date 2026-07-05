@@ -42,7 +42,7 @@ export default function QuickShareModal({ campaign, onClose }) {
           <CopyLinkButton
             url={buildCampaignUrl(campaign.slug)}
             campaignId={campaign.id}
-            label="Copy Link"
+            label="Copy Official Campaign Link"
             className="w-full"
           />
 

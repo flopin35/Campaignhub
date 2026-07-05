@@ -81,7 +81,7 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
           <p className="text-sm text-gray-400 mb-4">
             We sent a secure verification link to{' '}
             <strong className="text-gray-300">{user.email}</strong>.
-            Click the link to unlock uploads, your dashboard, and campaign management.
+            Click the link to unlock uploads and your campaign pages.
           </p>
 
           <ol className="text-xs text-gray-500 space-y-1 mb-4 list-decimal list-inside">
@@ -144,7 +144,7 @@ export function VerifyEmailPage() {
   }
 
   if (isVerified) {
-    return <AuthLoading message="Email verified — opening dashboard…" />;
+    return <AuthLoading message="Email verified — opening your campaign pages…" />;
   }
 
   return (

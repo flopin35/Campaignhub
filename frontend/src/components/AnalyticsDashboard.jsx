@@ -2,7 +2,7 @@ import { useCampaignAnalytics } from '../hooks/useCampaignAnalytics';
 import CampaignStats from './CampaignStats';
 import { hasAdvancedAnalytics } from '../utils/featureAccess';
 import { TrendingUp, Minus } from 'lucide-react';
-import UpgradePrompt from './UpgradePrompt';
+import PremiumGate from './PremiumGate';
 
 function BarChart({ items }) {
   const max = Math.max(...items.map((i) => i.value), 1);
@@ -31,7 +31,7 @@ function AdvancedInsights({ campaign, stats, views, shares, engagementRate }) {
   const topSource = [
     { label: 'Direct', value: stats?.directVisits ?? 0 },
     { label: 'QR', value: stats?.qrScans ?? 0 },
-    { label: 'WhatsApp', value: stats?.whatsappShares ?? 0 },
+    { label: 'WhatsApp', value: stats?.whatsappVisits ?? stats?.whatsappShares ?? 0 },
     { label: 'Facebook', value: stats?.facebookShares ?? 0 },
   ].sort((a, b) => b.value - a.value)[0];
 
@@ -39,7 +39,7 @@ function AdvancedInsights({ campaign, stats, views, shares, engagementRate }) {
     <div className="glass-card border-brand-500/20 p-6 space-y-5">
       <h3 className="text-sm font-medium text-brand-400 uppercase tracking-wide flex items-center gap-2">
         <TrendingUp className="w-4 h-4" />
-        Advanced Insights
+        Advanced page insights
       </h3>
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-surface-elevated rounded-xl p-4 text-center">
@@ -48,7 +48,7 @@ function AdvancedInsights({ campaign, stats, views, shares, engagementRate }) {
         </div>
         <div className="bg-surface-elevated rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-brand-400">{engagementRate}%</p>
-          <p className="text-xs text-gray-500 mt-1">Engagement rate</p>
+          <p className="text-xs text-gray-500 mt-1">Page activity rate</p>
         </div>
         <div className="bg-surface-elevated rounded-xl p-4 text-center">
           <p className="text-lg font-bold text-emerald-400 truncate">{topSource?.label || '—'}</p>
@@ -56,19 +56,19 @@ function AdvancedInsights({ campaign, stats, views, shares, engagementRate }) {
         </div>
       </div>
       <p className="text-xs text-gray-500">
-        Performance comparison and activity timing based on live Firestore analytics for {campaign?.title}.
+        Page activity breakdown for {campaign?.title} — based on live analytics.
       </p>
     </div>
   );
 }
 
-function PremiumAnalyticsUpsell() {
+function PremiumAnalyticsUpsell({ campaign }) {
   return (
-    <UpgradePrompt
-      title="Unlock advanced insights"
-      description="See engagement trends, click-through rates, and performance comparison — understand what works and improve results."
-      cta="View Advanced Analytics"
-      to="/premium"
+    <PremiumGate
+      campaign={campaign}
+      feature="analytics"
+      title="Unlock detailed page analytics"
+      description="See where visitors come from, which channels drive traffic, and detailed page activity breakdowns."
     />
   );
 }
@@ -79,74 +79,85 @@ export default function AnalyticsDashboard({ campaign, stats: externalStats }) {
   const advanced = hasAdvancedAnalytics(campaign);
 
   const views = stats?.totalViews ?? campaign?.views ?? 0;
-  const shares = (stats?.whatsappShares ?? 0) + (stats?.facebookShares ?? 0) + (stats?.twitterShares ?? 0)
+  const outboundShares = (stats?.whatsappShares ?? 0) + (stats?.facebookShares ?? 0) + (stats?.twitterShares ?? 0)
     + (stats?.telegramShares ?? 0) + (stats?.linkedinShares ?? 0);
+  const inboundWa = stats?.whatsappVisits ?? 0;
+  const leads = stats?.leadSignups ?? 0;
+  const ctaClicks = stats?.ctaClicks ?? campaign?.clicks ?? 0;
   const engagementRate = views > 0
-    ? (((stats?.linkCopies ?? 0) + shares + (stats?.qrScans ?? 0)) / views * 100).toFixed(1)
+    ? ((leads + ctaClicks + (stats?.linkCopies ?? 0)) / views * 100).toFixed(1)
     : '0';
 
   const trafficSources = [
     { label: 'Direct visits', value: stats?.directVisits ?? 0 },
+    { label: 'WhatsApp traffic', value: inboundWa },
     { label: 'QR scans', value: stats?.qrScans ?? 0 },
-    { label: 'WhatsApp', value: stats?.whatsappShares ?? 0 },
-    { label: 'Facebook', value: stats?.facebookShares ?? 0 },
-    { label: 'Other social', value: (stats?.twitterShares ?? 0) + (stats?.telegramShares ?? 0) + (stats?.linkedinShares ?? 0) },
+    { label: 'Facebook', value: stats?.facebookVisits ?? stats?.facebookShares ?? 0 },
+    { label: 'Instagram / TikTok', value: (stats?.instagramVisits ?? 0) + (stats?.tiktokVisits ?? 0) },
   ];
 
   const engagement = [
     { label: 'Views', value: views },
-    { label: 'Shares', value: shares },
-    { label: 'Link copies', value: stats?.linkCopies ?? 0 },
+    { label: 'Supporter sign-ups', value: leads },
+    { label: 'CTA clicks', value: ctaClicks },
+    { label: 'Share clicks', value: outboundShares },
     { label: 'Supporters', value: campaign?.followerCount ?? 0 },
-    { label: 'Comments', value: campaign?.commentCount ?? 0 },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         <div className="stat-card">
           <div className="text-xl sm:text-2xl font-bold text-white">{views.toLocaleString()}</div>
           <div className="text-[10px] sm:text-xs text-gray-500 mt-1">Views</div>
         </div>
         <div className="stat-card">
-          <div className="text-xl sm:text-2xl font-bold text-brand-400">{shares.toLocaleString()}</div>
-          <div className="text-[10px] sm:text-xs text-gray-500 mt-1">Shares</div>
+          <div className="text-xl sm:text-2xl font-bold text-emerald-400">{leads.toLocaleString()}</div>
+          <div className="text-[10px] sm:text-xs text-gray-500 mt-1">Sign-ups</div>
+        </div>
+        <div className="stat-card">
+          <div className="text-xl sm:text-2xl font-bold text-brand-400">{inboundWa.toLocaleString()}</div>
+          <div className="text-[10px] sm:text-xs text-gray-500 mt-1">WA traffic</div>
         </div>
         <div className="stat-card">
           <div className="text-xl sm:text-2xl font-bold text-emerald-400">{stats?.qrScans ?? 0}</div>
           <div className="text-[10px] sm:text-xs text-gray-500 mt-1">QR Scans</div>
         </div>
-        <div className="stat-card">
-          <div className="text-xl sm:text-2xl font-bold text-amber-400">{engagementRate}%</div>
-          <div className="text-[10px] sm:text-xs text-gray-500 mt-1 flex items-center justify-center gap-1">
-            Engagement
-            {views === 0 && <Minus className="w-3 h-3 text-gray-600" title="No data yet" />}
+        {advanced && (
+          <div className="stat-card col-span-2 sm:col-span-1">
+            <div className="text-xl sm:text-2xl font-bold text-amber-400">{engagementRate}%</div>
+            <div className="text-[10px] sm:text-xs text-gray-500 mt-1 flex items-center justify-center gap-1">
+              Page activity
+              {views === 0 && <Minus className="w-3 h-3 text-gray-600" title="No data yet" />}
+            </div>
           </div>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="glass-card">
-          <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Traffic Sources</h3>
-          <BarChart items={trafficSources} />
-        </div>
-        <div className="glass-card">
-          <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Engagement</h3>
-          <BarChart items={engagement} />
-        </div>
+        )}
       </div>
 
       {advanced ? (
-        <AdvancedInsights campaign={campaign} stats={stats} views={views} shares={shares} engagementRate={engagementRate} />
-      ) : (
-        <PremiumAnalyticsUpsell />
-      )}
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="glass-card">
+              <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Traffic Sources</h3>
+              <BarChart items={trafficSources} />
+            </div>
+            <div className="glass-card">
+              <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Page activity</h3>
+              <BarChart items={engagement} />
+            </div>
+          </div>
 
-      <div className="glass-card">
-        <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Detailed Stats</h3>
-        <CampaignStats stats={stats} campaign={campaign} />
-        <p className="text-xs text-gray-600 mt-4">Live data from Firebase · updates in real time</p>
-      </div>
+          <AdvancedInsights campaign={campaign} stats={stats} views={views} shares={outboundShares} engagementRate={engagementRate} />
+
+          <div className="glass-card">
+            <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Detailed Stats</h3>
+            <CampaignStats stats={stats} campaign={campaign} />
+            <p className="text-xs text-gray-600 mt-4">Live data from Firebase · updates in real time</p>
+          </div>
+        </>
+      ) : (
+        <PremiumAnalyticsUpsell campaign={campaign} />
+      )}
     </div>
   );
 }

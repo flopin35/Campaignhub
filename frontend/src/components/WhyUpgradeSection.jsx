@@ -1,31 +1,36 @@
 import { motion } from 'framer-motion';
-import { Eye, Shield, Zap, BarChart3, Clock } from 'lucide-react';
+import { Shield, Search, FileText, Calendar, Link2 } from 'lucide-react';
 
 const REASONS = [
   {
-    icon: Eye,
-    title: 'More Visibility',
-    description: 'Billboards and social posts disappear fast. Premium puts your campaign where people actually browse.',
-  },
-  {
     icon: Shield,
-    title: 'Better Trust',
-    description: 'Verified badges and admin-approved campaigns help customers feel safe engaging with your business.',
+    title: 'Public trust',
+    description:
+      'Voters and media need to know your page is authorized. Admin verification shows your campaign page is official — not an impersonator.',
   },
   {
-    icon: Zap,
-    title: 'Faster Marketing',
-    description: 'AI tools create slogans, captions, and CTAs in seconds — no marketing team required.',
+    icon: Search,
+    title: 'Campaign discovery',
+    description:
+      'A page no one can find helps no one. Premium keeps you visible in the public campaign directory when citizens are looking.',
   },
   {
-    icon: BarChart3,
-    title: 'Better Performance',
-    description: 'See what works with real analytics. Improve campaigns instead of guessing.',
+    icon: FileText,
+    title: 'Clear campaign message',
+    description:
+      'AI support helps you write slogans, captions, and updates that sound like you — ready for posters, WhatsApp, and radio mentions.',
   },
   {
-    icon: Clock,
-    title: 'Time Savings',
-    description: 'Generate platform-ready content once and share everywhere. Less work, more reach.',
+    icon: Calendar,
+    title: 'Election-period hosting',
+    description:
+      'Campaigns run longer than 14 days. Extended hosting keeps your official page live through the full election period.',
+  },
+  {
+    icon: Link2,
+    title: 'One official link',
+    description:
+      'Share a single official campaign URL and QR code everywhere. One trusted source for your biography, party, events, and updates.',
   },
 ];
 
@@ -33,9 +38,9 @@ export default function WhyUpgradeSection() {
   return (
     <section className="page-section">
       <div className="text-center mb-10 sm:mb-12">
-        <h2 className="section-title">Why Businesses Upgrade</h2>
+        <h2 className="section-title">Why campaigns upgrade</h2>
         <p className="section-subtitle mx-auto">
-          Premium is not about features — it is about solving problems that cost you customers, time, and money.
+          Premium is about official presence — verification, visibility, and a page voters can trust and find.
         </p>
       </div>
 

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ALLOWED_EXTENSIONS, MAX_FILE_SIZE, validateImageFile, StorageUploadError } from '../services/storageService';
+import { ALLOWED_EXTENSIONS, MAX_FILE_SIZE, validateImageFile, validatePaymentScreenshot, StorageUploadError } from '../services/storageService';
 import { Camera, X } from './icons/AppIcons';
 
 function formatSize(bytes) {
@@ -20,12 +20,16 @@ export default function ImageDropzone({
   multiple = false,
   disabled = false,
   className = '',
+  maxFileSize = MAX_FILE_SIZE,
+  validateFile = null,
 }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [localError, setLocalError] = useState('');
 
   const accept = ALLOWED_EXTENSIONS.map((e) => `.${e}`).join(',');
+  const validate = validateFile || ((file) => validateImageFile(file, maxFileSize));
+  const sizeHint = hint || `JPG, PNG, WEBP — max ${formatSize(maxFileSize)}`;
 
   const processFiles = useCallback(
     (fileList) => {
@@ -36,10 +40,10 @@ export default function ImageDropzone({
 
       try {
         if (multiple) {
-          files.forEach((f) => validateImageFile(f));
+          files.forEach((f) => validate(f));
           onChange?.(files);
         } else {
-          validateImageFile(files[0]);
+          validate(files[0]);
           onChange?.(files[0]);
         }
       } catch (err) {
@@ -47,7 +51,7 @@ export default function ImageDropzone({
         setLocalError(msg);
       }
     },
-    [multiple, onChange]
+    [multiple, onChange, validate],
   );
 
   const handleDrop = (e) => {
@@ -142,7 +146,7 @@ export default function ImageDropzone({
               <p className="text-gray-300 text-sm font-medium mb-1">
                 {dragging ? 'Drop image here' : 'Drag & drop or click to browse'}
               </p>
-              <p className="text-gray-500 text-xs">{hint}</p>
+              <p className="text-gray-500 text-xs">{sizeHint}</p>
             </motion.div>
           )}
         </AnimatePresence>

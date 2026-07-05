@@ -18,7 +18,7 @@ export default function Login() {
   const { toast } = useToast();
   const from = location.state?.from?.pathname || '/dashboard';
 
-  const [mode, setMode] = useState('password');
+  const [mode, setMode] = useState('otp');
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -28,13 +28,13 @@ export default function Login() {
     const verified = isUserVerified(user, profile);
     const dest = resolvePostLoginPath(verified, from);
     if (!verified) {
-      toast('Please verify your email to access your dashboard.', 'warning');
+      toast('Please verify your email to access your campaign pages.', 'warning');
       navigate(dest, { state: { from: location.state?.from }, replace: true });
       return;
     }
     setSuccessPulse(true);
     toast('Welcome back!', 'success');
-    setTimeout(() => navigate(dest, { replace: true }), 400);
+    navigate(dest, { replace: true });
   };
 
   const handleOtpSuccess = ({ user, profile }) => goAfterLogin(user, profile);
@@ -60,7 +60,7 @@ export default function Login() {
   return (
     <AuthShell
       title="Welcome back"
-      subtitle="Sign in securely to manage your campaigns"
+      subtitle="Sign in to manage your campaign pages"
       footer={
         <p className="text-sm text-gray-500">
           Don&apos;t have an account?{' '}
@@ -99,8 +99,8 @@ export default function Login() {
 
       <div className="flex rounded-xl bg-surface-elevated p-1 border border-surface-border">
         {[
-          { id: 'password', label: 'Password' },
           { id: 'otp', label: '6-digit code' },
+          { id: 'password', label: 'Password' },
         ].map((tab) => (
           <button
             key={tab.id}

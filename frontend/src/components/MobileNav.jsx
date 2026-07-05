@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LayoutGrid, PlusCircle, LayoutDashboard, Sparkles } from 'lucide-react';
+import { Home, LayoutGrid, PlusCircle, LayoutDashboard, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function MobileNav() {
@@ -8,13 +8,13 @@ export default function MobileNav() {
 
   const links = [
     { to: '/', label: 'Home', icon: Home },
-    { to: '/campaigns', label: 'Explore', icon: LayoutGrid },
+    { to: '/campaigns', label: 'Directory', icon: LayoutGrid },
     ...(isAuthenticated && isVerified
       ? [{ to: '/upload', label: 'Launch', icon: PlusCircle, highlight: true }]
       : []),
-    { to: '/premium', label: 'Premium', icon: Sparkles },
+    { to: '/premium', label: 'Premium', icon: Shield },
     ...(isAuthenticated
-      ? [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }]
+      ? [{ to: '/dashboard', label: 'Campaign Pages', icon: LayoutDashboard }]
       : [{ to: '/login', label: 'Sign In', icon: LayoutDashboard }]),
   ];
 

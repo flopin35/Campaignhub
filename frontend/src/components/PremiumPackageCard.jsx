@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Check } from './icons/AppIcons';
 import { getBundleSavings } from '../utils/contentQuality';
@@ -11,17 +12,32 @@ export default function PremiumPackageCard({
   compact = false,
   showButton = true,
   showConversion = true,
+  hideVariants = false,
+  to = null,
+  onCardClick = null,
+  onVariantClick = null,
 }) {
   const priceDisplay = plan.priceLabel
     || (plan.priceFrom ? `From ₵${plan.priceFrom}` : plan.price === 0 ? '₵0' : `₵${plan.price}`);
-  const isPopular = plan.badge === 'Most Popular';
+  const isPopular = plan.badge === 'Most Popular' || plan.badge === 'All-in-one';
   const savings = getBundleSavings(plan);
+  const clickable = !!(to || onSelect || onAction || onCardClick);
 
-  return (
+  const handleCardActivate = () => {
+    if (active) return;
+    if (onCardClick) onCardClick(plan);
+    else if (onSelect) onSelect(plan);
+  };
+
+  const card = (
     <motion.div
-      whileHover={onSelect && !active ? { y: -3 } : undefined}
+      whileHover={clickable && !active ? { y: -3 } : undefined}
       transition={{ duration: 0.2 }}
-      className={`premium-card relative flex flex-col h-full ${selected ? 'premium-card-selected' : ''} ${isPopular ? 'premium-card-popular premium-card-glow' : ''} ${plan.isBundle ? 'premium-card-bundle' : ''} ${active ? 'opacity-75' : ''}`}
+      onClick={!to && (onCardClick || onSelect) && !active ? handleCardActivate : undefined}
+      role={clickable && !to ? 'button' : undefined}
+      tabIndex={clickable && !to ? 0 : undefined}
+      onKeyDown={!to && (onCardClick || onSelect) && !active ? (e) => e.key === 'Enter' && handleCardActivate() : undefined}
+      className={`premium-card relative flex flex-col h-full ${selected ? 'premium-card-selected' : ''} ${isPopular ? 'premium-card-popular premium-card-glow' : ''} ${plan.isBundle || plan.isSubscription ? 'premium-card-bundle' : ''} ${active ? 'opacity-75' : ''} ${clickable ? 'cursor-pointer hover:border-brand-500/40 transition-colors' : ''}`}
     >
       <div className="flex flex-wrap items-center gap-2 absolute -top-2.5 left-4 right-4">
         {plan.badge && (
@@ -62,11 +78,13 @@ export default function PremiumPackageCard({
         {!showConversion && (
           <>
             <p className="text-xs text-brand-400/90 mb-2 leading-relaxed">{plan.mainBenefit || plan.tagline}</p>
-            <p className="text-[11px] text-gray-600 italic mb-4">"{plan.painPoint}"</p>
+            {plan.painPoint && (
+              <p className="text-[11px] text-gray-600 italic mb-4">"{plan.painPoint}"</p>
+            )}
           </>
         )}
 
-        {!compact && (
+        {!compact && plan.features && (
           <ul className="space-y-2 mb-4">
             {plan.features.map((f) => (
               <li key={f} className="text-xs text-gray-400 flex items-start gap-2">
@@ -81,11 +99,11 @@ export default function PremiumPackageCard({
           <p className="text-[10px] text-gray-600">Best for: {plan.bestFor}</p>
         )}
 
-        {plan.variants && (
+        {plan.variants && !onVariantClick && (
           <div className="flex flex-wrap gap-2 mt-3">
             {plan.variants.map((v) => (
               <span key={v.id} className="text-[10px] px-2 py-1 rounded-md bg-surface-elevated border border-surface-border text-gray-400">
-                {v.label} · ₵{v.price}
+                {v.label} · {v.price} GHS
               </span>
             ))}
           </div>
@@ -100,7 +118,10 @@ export default function PremiumPackageCard({
       ) : showButton && (
         <button
           type="button"
-          onClick={() => (onAction ? onAction(plan) : onSelect?.(plan))}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAction ? onAction(plan) : onSelect?.(plan);
+          }}
           className={`mt-4 w-full py-3 rounded-xl text-sm font-semibold transition-all duration-200 min-h-[44px] ${
             isPopular || selected
               ? 'bg-brand-600 hover:bg-brand-500 text-white shadow-glow-sm'
@@ -110,6 +131,36 @@ export default function PremiumPackageCard({
           {plan.button || 'Upgrade'}
         </button>
       )}
+
+      {to && !active && !onCardClick && (
+        <p className="text-xs text-brand-400 mt-4 font-medium group-hover:text-brand-300">
+          Tap to subscribe →
+        </p>
+      )}
+
+      {onCardClick && !active && (
+        <p className="text-xs text-brand-400 mt-4 font-medium">
+          Tap to upgrade →
+        </p>
+      )}
     </motion.div>
   );
+
+  if (to && !onCardClick) {
+    return (
+      <Link to={to} className="block h-full group no-underline">
+        {card}
+      </Link>
+    );
+  }
+
+  if (onCardClick) {
+    return (
+      <div className="block h-full group cursor-pointer">
+        {card}
+      </div>
+    );
+  }
+
+  return card;
 }

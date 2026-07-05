@@ -12,8 +12,8 @@ import AuthShell from '../components/AuthShell';
 export default function Signup() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [mode, setMode] = useState('password');
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
+  const [mode, setMode] = useState('otp');
+  const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successPulse, setSuccessPulse] = useState(false);
@@ -27,7 +27,7 @@ export default function Signup() {
     }
     setSuccessPulse(true);
     toast(isNew ? 'Welcome to CampaignHub!' : 'Welcome back!', 'success');
-    setTimeout(() => navigate('/dashboard', { replace: true }), 450);
+    navigate('/dashboard', { replace: true });
   };
 
   const handleOtpSuccess = ({ user, profile, isNewUser }) => finishSignup(user, profile, isNewUser !== false);
@@ -42,15 +42,11 @@ export default function Signup() {
       setError('Password must be at least 6 characters.');
       return;
     }
-    if (form.password !== form.confirm) {
-      setError('Passwords do not match.');
-      return;
-    }
 
     setLoading(true);
     try {
-      await signUpWithEmail(form.name, form.email, form.password);
-      navigate('/verify-email', { replace: true });
+      const { user, profile } = await signUpWithEmail(form.name, form.email, form.password);
+      finishSignup(user, profile, true);
     } catch (err) {
       const msg = getAuthErrorMessage(err.code) || err.message;
       setError(msg);
@@ -63,7 +59,7 @@ export default function Signup() {
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Join CampaignHub — launch campaigns in minutes"
+      subtitle="Create your account — launch an official campaign page in minutes"
       footer={
         <p className="text-sm text-gray-500">
           Already have an account?{' '}
@@ -79,7 +75,7 @@ export default function Signup() {
           animate={{ opacity: 1, scale: 1 }}
           className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-sm text-center"
         >
-          Account ready — opening dashboard…
+          Account ready — opening your campaign pages…
         </motion.div>
       )}
 
@@ -168,29 +164,15 @@ export default function Signup() {
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required
+              minLength={6}
               autoComplete="new-password"
               placeholder="Min. 6 characters"
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
-            <input
-              type="password"
-              value={form.confirm}
-              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
-              required
-              autoComplete="new-password"
-              placeholder="••••••••"
               className="input-field"
             />
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
             {loading ? 'Creating account…' : 'Create Account'}
           </button>
-          <p className="text-xs text-gray-500 text-center">
-            Email signup requires verification before uploading campaigns.
-          </p>
         </form>
       )}
     </AuthShell>

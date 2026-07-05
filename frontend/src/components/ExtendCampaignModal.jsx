@@ -29,7 +29,7 @@ export default function ExtendCampaignModal({ campaign, onClose }) {
       });
       setPayment(result);
       setStep('payment');
-      toast('Extension request created', 'success');
+      toast('Hosting extension started', 'success');
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -49,7 +49,7 @@ export default function ExtendCampaignModal({ campaign, onClose }) {
         campaignId: campaign.id,
         screenshotFile: screenshot,
       });
-      toast('Extension proof submitted — awaiting admin approval', 'success');
+      toast('Hosting extension submitted — awaiting admin review', 'success');
       onClose();
     } catch (err) {
       toast(err.message, 'error');
@@ -74,7 +74,7 @@ export default function ExtendCampaignModal({ campaign, onClose }) {
           className="glass-card w-full max-w-md space-y-4"
         >
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white">Extend Campaign</h3>
+            <h3 className="font-semibold text-white">Extend page hosting</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
@@ -82,7 +82,7 @@ export default function ExtendCampaignModal({ campaign, onClose }) {
 
           {step === 'select' && (
             <>
-              <p className="text-sm text-gray-400">Extend "{campaign.title}" without creating a new campaign.</p>
+              <p className="text-sm text-gray-400">Keep &quot;{campaign.title}&quot; live in the directory — extend hosting on this official page.</p>
               <div className="space-y-2">
                 {EXTENSION_PACKAGES.map((pkg) => (
                   <button
@@ -122,7 +122,7 @@ export default function ExtendCampaignModal({ campaign, onClose }) {
                 className="text-sm text-gray-400 w-full"
               />
               <button onClick={handleSubmitProof} disabled={loading} className="btn-primary w-full">
-                Submit Payment Proof
+                Submit confirmation
               </button>
             </>
           )}
@@ -142,14 +142,14 @@ export function ExtendCampaignBanner({ campaign, onExtend }) {
       <div>
         <p className="text-amber-400 font-medium text-sm inline-flex items-center gap-2">
           {daysLeft <= 3 && <AlertTriangle className="w-4 h-4 shrink-0" />}
-          {daysLeft <= 3 ? 'Campaign expires soon!' : 'Campaign ending soon'}
+          {daysLeft <= 3 ? 'Campaign page expiring soon!' : 'Campaign page ending soon'}
         </p>
         <p className="text-xs text-gray-400 mt-1">
-          {Math.ceil(daysLeft)} day{Math.ceil(daysLeft) !== 1 ? 's' : ''} remaining — extend to keep visibility.
+          {Math.ceil(daysLeft)} day{Math.ceil(daysLeft) !== 1 ? 's' : ''} remaining — extend hosting to stay in the directory.
         </p>
       </div>
       <button onClick={onExtend} className="btn-primary text-sm py-2 px-4 shrink-0">
-        Extend Campaign
+        Extend hosting
       </button>
     </div>
   );

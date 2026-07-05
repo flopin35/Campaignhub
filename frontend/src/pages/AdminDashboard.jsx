@@ -39,17 +39,12 @@ import { activateCampaignBoost, clearCampaignBoost } from '../services/boostServ
 import { BOOST_PACKAGES } from '../data/boostPackages';
 
 import {
-
   verifyPaymentAndActivate,
-
   verifyPremiumPayment,
-
   rejectPayment,
-
   getPaymentByCampaign,
-
   getRevenueSummary,
-
+  scorePaymentPriority,
 } from '../services/paymentService';
 
 import { verifyCampaign } from '../services/verificationService';
@@ -119,27 +114,8 @@ export default function AdminDashboard() {
       const map = {};
 
       all.forEach((p) => {
-
         const existing = map[p.campaignId];
-
-        const prefer = (a, b) => {
-
-          if (!a) return b;
-
-          if (a.type === 'extension' && a.paymentStatus === 'pending_review') return a;
-
-          if (b.type === 'extension' && b.paymentStatus === 'pending_review') return b;
-
-          if (a.paymentStatus === 'pending_review') return a;
-
-          if (b.paymentStatus === 'pending_review') return b;
-
-          return b;
-
-        };
-
-        map[p.campaignId] = prefer(existing, p);
-
+        map[p.campaignId] = !existing || scorePaymentPriority(p) > scorePaymentPriority(existing) ? p : existing;
       });
 
       setPayments(map);
@@ -175,71 +151,44 @@ export default function AdminDashboard() {
 
 
   const handleVerify = async (campaign) => {
-
     setActionLoading(campaign.id + 'verify');
-
     try {
-
       const payment = payments[campaign.id] || await getPaymentByCampaign(campaign.id);
-
-      if (payment?.purchaseType === 'premium' || payment?.purchaseType === 'hosting') {
-
-        await verifyPremiumPayment({ paymentId: payment.id, campaignId: campaign.id, payment, campaign });
-
-        toast(`Premium activated for "${campaign.title}"`, 'success');
-
-        return;
-
-      }
-
       const isFree = campaign.packageType === 'free' || campaign.packagePrice === 0;
 
       if (!payment && isFree) {
-
         await approveCampaign(campaign.id, campaign.durationDays || 14);
-
         await createNotification({
-
           userId: campaign.ownerId,
-
-          message: `Your campaign "${campaign.title}" is now live!`,
-
+          message: `Your official campaign page "${campaign.title}" is now live!`,
           type: 'campaign_approved',
-
           campaignId: campaign.id,
-
         });
-
         toast(`"${campaign.title}" is now live!`, 'success');
-
         return;
-
       }
 
-      if (!payment) throw new Error('No payment record found');
+      if (!payment || payment.paymentStatus !== 'pending_review') {
+        throw new Error('No payment awaiting review for this campaign.');
+      }
+
+      if (payment.purchaseType === 'premium' || payment.purchaseType === 'hosting') {
+        await verifyPremiumPayment({ paymentId: payment.id, campaignId: campaign.id, payment, campaign });
+        toast(`Premium activated for "${campaign.title}"`, 'success');
+        return;
+      }
 
       if (payment.type === 'extension') {
-
         await handleExtensionApproval({ payment, campaign, toast });
-
       } else {
-
-        await verifyPaymentAndActivate({ paymentId: payment.id, campaignId: campaign.id, campaign });
-
+        await verifyPaymentAndActivate({ paymentId: payment.id, campaignId: campaign.id, campaign, payment });
         toast(`"${campaign.title}" is now live!`, 'success');
-
       }
-
     } catch (err) {
-
       toast(err.message, 'error');
-
     } finally {
-
       setActionLoading(null);
-
     }
-
   };
 
 
@@ -252,9 +201,16 @@ export default function AdminDashboard() {
 
     try {
 
-      const payment = payments[campaign.id];
+      const payment = payments[campaign.id] || await getPaymentByCampaign(campaign.id);
+      const isPremium = payment?.purchaseType === 'premium' || payment?.purchaseType === 'hosting';
 
-      await rejectPayment({ paymentId: payment?.id, campaignId: campaign.id, ownerId: campaign.ownerId, reason });
+      await rejectPayment({
+        paymentId: payment?.id,
+        campaignId: campaign.id,
+        ownerId: campaign.ownerId,
+        reason,
+        isPremium,
+      });
 
       toast('Payment rejected', 'warning');
 
@@ -284,7 +240,7 @@ export default function AdminDashboard() {
 
           await extendCampaign(campaign.id, extra || 7, campaign.endDate, campaign.durationDays);
 
-          toast('Campaign extended', 'success');
+          toast('Hosting extended', 'success');
 
           break;
 
@@ -308,7 +264,7 @@ export default function AdminDashboard() {
 
           await verifyCampaign(campaign.id, !campaign.verified, campaign.ownerId, campaign.title);
 
-          toast(campaign.verified ? 'Verification revoked' : 'Campaign verified', 'success');
+          toast(campaign.verified ? 'Authorization revoked' : 'Page authorized', 'success');
 
           break;
 
@@ -316,7 +272,7 @@ export default function AdminDashboard() {
 
           await toggleCampaignDisabled(campaign.id, !campaign.disabled);
 
-          toast(campaign.disabled ? 'Campaign re-enabled' : 'Campaign disabled', 'info');
+          toast(campaign.disabled ? 'Page re-enabled' : 'Page hidden from directory', 'info');
 
           break;
 
@@ -334,7 +290,7 @@ export default function AdminDashboard() {
 
             await deleteCampaign(campaign.id);
 
-            toast('Campaign deleted', 'info');
+            toast('Campaign page removed', 'info');
 
           }
 
@@ -396,7 +352,12 @@ export default function AdminDashboard() {
 
         const isExtension = pay?.type === 'extension';
 
-        const isPending = c.status === 'pending_review' || c.status === 'payment_pending' || (isExtension && pay?.paymentStatus === 'pending_review');
+        const isPremiumPayment = pay?.purchaseType === 'premium' || pay?.purchaseType === 'hosting';
+
+        const isPending = c.status === 'pending_review'
+          || c.status === 'payment_pending'
+          || (isExtension && pay?.paymentStatus === 'pending_review')
+          || (isPremiumPayment && pay?.paymentStatus === 'pending_review');
 
 
 
@@ -416,33 +377,35 @@ export default function AdminDashboard() {
 
                   <span className={getStatusBadgeClass(c.status)}>{getStatusLabel(c.status)}</span>
 
-                  <VerificationBadge verified={c.verified} />
+                  <VerificationBadge verified={c.verified} label="Admin verified" />
 
                   {c.paymentVerified && (
 
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
 
-                      Verified Payment
+                      Payment confirmed
 
                     </span>
 
                   )}
 
-                  {isPending && (
-
+                  {c.verificationRequested && !c.verified && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
-
-                      Pending Approval
-
+                      Auth requested
                     </span>
+                  )}
 
+                  {isPending && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
+                      Pending Approval
+                    </span>
                   )}
 
                   {c.status === 'active' && !c.disabled && (
 
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-300 border border-brand-500/20">
 
-                      Campaign Active
+                      Page active
 
                     </span>
 
@@ -506,7 +469,7 @@ export default function AdminDashboard() {
 
                   <button onClick={() => handleVerify(c)} disabled={!!actionLoading} className="btn-primary text-xs py-2 px-4">
 
-                    {isExtension ? 'Approve Extension' : 'Verify & Activate'}
+                    {isExtension ? 'Approve Extension' : isPremiumPayment ? 'Verify Premium' : 'Verify & Activate'}
 
                   </button>
 
@@ -530,7 +493,7 @@ export default function AdminDashboard() {
 
                   <button onClick={() => handleAction('spotlight', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.spotlight ? 'Remove Spotlight' : 'Spotlight'}</button>
 
-                  <button onClick={() => handleAction('verify', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.verified ? 'Revoke Verify' : 'Verify'}</button>
+                  <button onClick={() => handleAction('verify', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.verified ? 'Revoke auth' : 'Authorize'}</button>
 
                   <button onClick={() => handleAction('disable', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.disabled ? 'Enable' : 'Disable'}</button>
 
@@ -544,7 +507,7 @@ export default function AdminDashboard() {
 
               )}
 
-              <button onClick={() => handleAction('remove', c)} disabled={!!actionLoading} className="text-xs py-2 px-3 text-gray-500 hover:text-red-400">Delete</button>
+              <button onClick={() => handleAction('remove', c)} disabled={!!actionLoading} className="text-xs py-2 px-3 text-gray-500 hover:text-red-400">Remove page</button>
 
             </div>
 
@@ -556,30 +519,19 @@ export default function AdminDashboard() {
 
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Activate Boost</p>
 
-                <div className="flex flex-wrap gap-2">
-
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                   {BOOST_PACKAGES.map((bp) => (
-
                     <button
-
                       key={bp.id}
-
                       type="button"
-
                       onClick={() => handleBoost(c, bp)}
-
                       disabled={!!actionLoading}
-
-                      className="text-[10px] py-1.5 px-2.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20"
-
+                      className="text-left py-2 px-2.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 min-h-[44px] touch-manipulation"
                     >
-
-                      {bp.name}
-
+                      <span className="text-[10px] block text-amber-400/80">{bp.label}</span>
+                      <span className="text-xs font-semibold">₵{bp.price}</span>
                     </button>
-
                   ))}
-
                 </div>
 
               </div>
@@ -596,7 +548,7 @@ export default function AdminDashboard() {
 
         <p className="text-center text-gray-500 py-16">
 
-          {search ? 'No campaigns match your search.' : 'No campaigns in this queue.'}
+          {search ? 'No campaign pages match your search.' : 'No campaign pages in this queue.'}
 
         </p>
 
@@ -644,7 +596,7 @@ export default function AdminDashboard() {
 
                   <div className="text-2xl font-bold text-emerald-400">{revenue.totalRevenue.toLocaleString()} GHS</div>
 
-                  <div className="text-xs text-gray-500 mt-1">Verified revenue</div>
+                  <div className="text-xs text-gray-500 mt-1">Confirmed revenue</div>
 
                 </div>
 
@@ -660,7 +612,7 @@ export default function AdminDashboard() {
 
                   <div className="text-2xl font-bold text-white">{revenue.verifiedCount}</div>
 
-                  <div className="text-xs text-gray-500 mt-1">Verified payments</div>
+                  <div className="text-xs text-gray-500 mt-1">Confirmed payments</div>
 
                 </div>
 

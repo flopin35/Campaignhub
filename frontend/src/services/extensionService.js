@@ -54,7 +54,7 @@ export async function approveExtension({ paymentId, campaignId, campaign, extens
 
   await createNotification({
     userId: ownerId,
-    message: `Extension approved! "${title}" extended by ${extensionDays} days.`,
+    message: `Hosting extended — "${title}" is live for ${extensionDays} more days.`,
     type: 'extension_success',
     campaignId,
   });

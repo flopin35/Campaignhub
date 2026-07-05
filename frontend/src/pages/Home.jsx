@@ -9,16 +9,15 @@ import CampaignCard from '../components/CampaignCard';
 import CampaignSkeleton from '../components/CampaignSkeleton';
 import EmptyState from '../components/EmptyState';
 import FeaturedBanner from '../components/FeaturedBanner';
-import SpotlightCarousel from '../components/SpotlightCarousel';
-import BoostedHero from '../components/BoostedHero';
 import { useCampaigns } from '../hooks/useCampaigns';
 import { useMemo } from 'react';
+import { BRAND_COPY } from '../data/brand';
 
 export default function Home() {
   const { campaigns: liveCampaigns, loading } = useCampaigns({ status: 'active', sort: 'newest' });
 
   const featuredCampaign = useMemo(
-    () => liveCampaigns.find((c) => c.featured) || liveCampaigns[0] || null,
+    () => liveCampaigns.find((c) => c.featured) || liveCampaigns.find((c) => c.verified) || liveCampaigns[0] || null,
     [liveCampaigns]
   );
 
@@ -31,9 +30,6 @@ export default function Home() {
           <FeaturedBanner campaign={featuredCampaign} />
         </section>
       )}
-
-      <BoostedHero campaigns={liveCampaigns} loading={loading} />
-      <SpotlightCarousel campaigns={liveCampaigns} />
 
       <FeatureSection />
       <HowItWorks />
@@ -49,11 +45,11 @@ export default function Home() {
             className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10"
           >
             <div>
-              <h2 className="section-title">Live Campaigns</h2>
-              <p className="section-subtitle">Real campaigns approved and running on CampaignHub.</p>
+              <h2 className="section-title">Campaign Directory</h2>
+              <p className="section-subtitle">Discover official political campaign pages across Ghana.</p>
             </div>
             <Link to="/campaigns" className="text-sm text-brand-400 hover:text-brand-300 font-medium shrink-0">
-              View all →
+              Browse all →
             </Link>
           </motion.div>
 
@@ -61,9 +57,9 @@ export default function Home() {
             <CampaignSkeleton />
           ) : liveCampaigns.length === 0 ? (
             <EmptyState
-              title="No live campaigns yet"
-              description="Be the first to launch a free campaign on CampaignHub."
-              actionLabel="Launch Free Campaign"
+              title="No campaign pages yet"
+              description="Be the first to launch an official political campaign page on CampaignHub."
+              actionLabel={BRAND_COPY.launchCta}
               actionTo="/upload"
             />
           ) : (

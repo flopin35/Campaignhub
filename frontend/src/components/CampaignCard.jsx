@@ -37,7 +37,7 @@ export default function CampaignCard({ campaign, index = 0, showViews = true, sh
             {campaign.viralScore > 0 && (
               <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-brand-600/90 text-white font-medium inline-flex items-center gap-1">
                 <Flame className="w-3 h-3" />
-                Trending
+                Popular
               </span>
             )}
           </div>
@@ -49,7 +49,7 @@ export default function CampaignCard({ campaign, index = 0, showViews = true, sh
                 <VerificationBadge verified={campaign.verified} />
                 {campaign.paymentVerified && (
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-                    Verified Payment
+                    Payment confirmed
                   </span>
                 )}
                 <BoostBadge campaign={campaign} showTimer={false} />

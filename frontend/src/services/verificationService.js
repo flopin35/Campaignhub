@@ -5,14 +5,15 @@ import { createNotification } from './notificationService';
 export async function verifyCampaign(campaignId, verified = true, ownerId, title) {
   await updateDoc(doc(db, 'campaigns', campaignId), {
     verified,
+    ...(verified ? { verificationRequested: false } : {}),
     updatedAt: serverTimestamp(),
   });
   if (ownerId) {
     await createNotification({
       userId: ownerId,
       message: verified
-        ? `Your campaign "${title}" has been verified.`
-        : `Verification removed from "${title}".`,
+        ? `Your campaign page "${title}" has been authorized by admin.`
+        : `Admin authorization removed from "${title}".`,
       type: verified ? 'campaign_verified' : 'verification_revoked',
       campaignId,
     });

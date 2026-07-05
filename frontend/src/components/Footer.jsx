@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Mail } from 'lucide-react';
 import { PAYMENT_DETAILS } from '../data/packages';
+import { BRAND, BRAND_COPY } from '../data/brand';
 
 export default function Footer() {
   return (
@@ -12,10 +13,10 @@ export default function Footer() {
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-500 flex items-center justify-center text-white font-bold text-sm shadow-glow-sm">
                 CH
               </div>
-              <span className="font-bold text-lg text-white">CampaignHub</span>
+              <span className="font-bold text-lg text-white">{BRAND.name}</span>
             </Link>
             <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
-              A trusted campaign operating system for businesses, politicians, creators, and organizations in Ghana.
+              {BRAND.tagline} Built for candidates, parties, and citizens in {BRAND.country}.
             </p>
           </div>
 
@@ -23,16 +24,16 @@ export default function Footer() {
             <h4 className="text-sm font-semibold text-gray-300 mb-4">Platform</h4>
             <div className="space-y-2.5">
               <Link to="/campaigns" className="block text-sm text-gray-500 hover:text-brand-400 transition-colors">
-                Explore Campaigns
+                Campaign Directory
               </Link>
               <Link to="/upload" className="block text-sm text-gray-500 hover:text-brand-400 transition-colors">
-                Launch Free Campaign
+                {BRAND_COPY.launchCta}
               </Link>
               <Link to="/premium" className="block text-sm text-gray-500 hover:text-brand-400 transition-colors">
-                Premium Tools
+                Verification & Hosting
               </Link>
               <Link to="/dashboard" className="block text-sm text-gray-500 hover:text-brand-400 transition-colors">
-                Dashboard
+                My Campaign Pages
               </Link>
             </div>
           </div>
@@ -67,8 +68,8 @@ export default function Footer() {
         </div>
 
         <div className="mt-10 pt-8 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-600">
-          <p>© {new Date().getFullYear()} CampaignHub Ghana. All rights reserved.</p>
-          <p>Free to start · Telecel Cash payments · Admin verified</p>
+          <p>© {new Date().getFullYear()} {BRAND.name} {BRAND.country}. All rights reserved.</p>
+          <p>Free to start · Official pages · Admin-verified campaign pages</p>
         </div>
       </div>
     </footer>

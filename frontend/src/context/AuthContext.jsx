@@ -65,6 +65,7 @@ export function AuthProvider({ children }) {
         authLog.session('Auth state changed', firebaseUser?.email || 'signed out');
         setUser(firebaseUser);
         if (firebaseUser) {
+          await firebaseUser.getIdToken(true).catch(() => {});
           await loadProfile(firebaseUser);
         } else {
           setUserProfile(null);
@@ -118,7 +119,7 @@ export function AuthProvider({ children }) {
     if (authPhase === 'redirect') return 'Redirecting safely…';
     if (authPhase === 'restoring') return 'Securing your session…';
     if (authPhase === 'initializing') return 'Loading…';
-    return 'Restoring dashboard…';
+    return 'Loading your campaign pages…';
   }, [authPhase]);
 
   const value = {

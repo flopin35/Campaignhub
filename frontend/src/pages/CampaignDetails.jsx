@@ -7,13 +7,11 @@ import CampaignSkeleton from '../components/CampaignSkeleton';
 import ShareCampaignSection from '../components/ShareCampaignSection';
 import VerificationBadge from '../components/VerificationBadge';
 import CampaignCountdown from '../components/CampaignCountdown';
-import FollowButton from '../components/FollowButton';
-import CommentsSection from '../components/CommentsSection';
 import ExtendCampaignModal, { ExtendCampaignBanner } from '../components/ExtendCampaignModal';
 import ReportButton from '../components/ReportButton';
 import { trackVisit } from '../services/analyticsService';
 import { getReferralSource } from '../utils/sharing';
-import { BarChart3, CheckCircle2 } from '../components/icons/AppIcons';
+import { LayoutDashboard } from 'lucide-react';
 import { formatDate, getStatusBadgeClass } from '../utils/helpers';
 import { createNotification } from '../services/notificationService';
 import { shouldShowExpiryWarning } from '../services/extensionService';
@@ -44,7 +42,7 @@ export default function CampaignDetails() {
     ) {
       createNotification({
         userId: user.uid,
-        message: `Campaign "${campaign.title}" expires in ${Math.ceil(campaign.remainingMs / 86400000)} days`,
+        message: `Your campaign page "${campaign.title}" expires in ${Math.ceil(campaign.remainingMs / 86400000)} days`,
         type: 'campaign_expiring',
         campaignId: campaign.id,
       }).catch(() => {});
@@ -63,9 +61,9 @@ export default function CampaignDetails() {
   if (error || !campaign || campaign.status !== 'active' || campaign.isExpired) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
-        <h2 className="text-2xl font-bold text-white mb-2">Campaign Not Found</h2>
-        <p className="text-gray-400 mb-6">This campaign may be pending, expired, or doesn't exist.</p>
-        <Link to="/campaigns" className="btn-primary">Browse Campaigns</Link>
+        <h2 className="text-2xl font-bold text-white mb-2">Campaign page not found</h2>
+        <p className="text-gray-400 mb-6">This official campaign page may be hidden, archived, or not yet published.</p>
+        <Link to="/campaigns" className="btn-primary">Campaign Directory</Link>
       </div>
     );
   }
@@ -79,7 +77,7 @@ export default function CampaignDetails() {
           <img src={campaign.bannerImage} alt={campaign.title} className="w-full aspect-[21/9] object-cover" loading="lazy" />
           {campaign.logoUrl && (
             <div className="absolute bottom-4 left-4 w-16 h-16 sm:w-20 sm:h-20 rounded-xl border-2 border-white/20 bg-surface-card overflow-hidden shadow-lg">
-              <img src={campaign.logoUrl} alt="" className="w-full h-full object-cover" />
+              <img src={campaign.logoUrl} alt="Party logo" className="w-full h-full object-cover" />
             </div>
           )}
         </div>
@@ -89,9 +87,19 @@ export default function CampaignDetails() {
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <span className={getStatusBadgeClass(campaign.status)}>{campaign.status}</span>
           <VerificationBadge verified={campaign.verified} />
+          {campaign.verificationRequested && !campaign.verified && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
+              Authorization pending
+            </span>
+          )}
+          {campaign.paymentVerified && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+              Payment confirmed
+            </span>
+          )}
           {campaign.campaignType && <span className="badge-pending">{campaign.campaignType}</span>}
           {campaign.packageName && <span className="text-xs text-gray-500">{campaign.packageName}</span>}
-          {campaign.featured && <span className="badge-active">Featured</span>}
+          {campaign.featured && <span className="badge-active">Featured in directory</span>}
           {campaign.spotlight && <span className="badge-pending">Spotlight</span>}
           <CampaignCountdown remainingMs={campaign.remainingMs} endDate={campaign.endDate} />
           <span className="text-sm text-gray-500">{campaign.views || 0} views</span>
@@ -99,21 +107,22 @@ export default function CampaignDetails() {
 
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{campaign.title}</h1>
         {campaign.ownerName && (
-          <p className="text-brand-400 text-sm mb-4">by {campaign.ownerName}</p>
+          <p className="text-brand-400 text-sm mb-4">Candidate: {campaign.ownerName}</p>
         )}
-        <p className="text-gray-400 text-lg leading-relaxed mb-6">{campaign.description}</p>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <FollowButton campaign={campaign} />
-          <div className="flex items-center gap-2">
-            {isOwner && (
-              <Link to={`/campaign/${slug}/performance`} className="btn-secondary text-sm py-2 px-4 inline-flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Performance
-              </Link>
-            )}
-            <ReportButton type="campaign" targetId={campaign.id} />
-          </div>
+        <div className="mb-8">
+          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Campaign Message</h2>
+          <p className="text-gray-400 text-lg leading-relaxed">{campaign.description}</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2 mb-8">
+          {isOwner && (
+            <Link to={`/dashboard?campaign=${slug}`} className="btn-primary text-sm py-2.5 px-4 inline-flex items-center justify-center gap-2 w-full sm:w-auto">
+              <LayoutDashboard className="w-4 h-4" />
+              Manage Campaign Page
+            </Link>
+          )}
+          <ReportButton type="campaign" targetId={campaign.id} />
         </div>
 
         {campaign.galleryImages?.length > 0 && (
@@ -137,7 +146,7 @@ export default function CampaignDetails() {
           )}
           {campaign.socialLinks && Object.values(campaign.socialLinks).some(Boolean) && (
             <div className="card">
-              <h3 className="text-sm font-medium text-gray-500 mb-3">Social Links</h3>
+              <h3 className="text-sm font-medium text-gray-500 mb-3">Official Links</h3>
               <div className="space-y-2 text-sm">
                 {campaign.socialLinks.website && (
                   <a href={campaign.socialLinks.website} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">Website</a>
@@ -165,7 +174,6 @@ export default function CampaignDetails() {
         </div>
 
         <ShareCampaignSection campaign={campaign} />
-        <CommentsSection campaignId={campaign.id} />
       </motion.div>
 
       {showExtend && (

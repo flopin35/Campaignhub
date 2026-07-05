@@ -18,7 +18,7 @@ export function AdminVerificationPanel({ campaigns }) {
     setLoading(c.id);
     try {
       await verifyCampaign(c.id, !c.verified, c.ownerId, c.title);
-      toast(c.verified ? 'Verification revoked' : 'Campaign verified', 'success');
+      toast(c.verified ? 'Authorization revoked' : 'Page authorized', 'success');
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -39,17 +39,41 @@ export function AdminVerificationPanel({ campaigns }) {
   };
 
   const active = campaigns.filter((c) => c.status === 'active');
+  const pendingAuth = active.filter((c) => c.verificationRequested && !c.verified);
 
   return (
     <div className="space-y-8">
+      {pendingAuth.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold text-white mb-4">Pending authorization requests</h2>
+          <div className="space-y-3">
+            {pendingAuth.map((c) => (
+              <div key={c.id} className="glass-card p-4 flex items-center justify-between gap-4 border-amber-500/20">
+                <div>
+                  <p className="text-white font-medium">{c.title}</p>
+                  <p className="text-xs text-amber-400">{c.ownerName} · Verification requested</p>
+                </div>
+                <button
+                  onClick={() => toggleCampaign(c)}
+                  disabled={loading === c.id}
+                  className="text-xs py-2 px-4 rounded-xl border border-blue-500/30 text-blue-400"
+                >
+                  Authorize
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section>
-        <h2 className="text-lg font-semibold text-white mb-4">Verify Campaigns</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">Authorize Campaign Pages</h2>
         <div className="space-y-3">
           {active.map((c) => (
             <div key={c.id} className="glass-card p-4 flex items-center justify-between gap-4">
               <div>
                 <p className="text-white font-medium">{c.title}</p>
-                <p className="text-xs text-gray-500">{c.ownerName} · {c.verified ? 'Verified' : 'Not verified'}</p>
+                <p className="text-xs text-gray-500">{c.ownerName} · {c.verified ? 'Authorized' : 'Not authorized'}</p>
               </div>
               <button
                 onClick={() => toggleCampaign(c)}
@@ -58,11 +82,11 @@ export function AdminVerificationPanel({ campaigns }) {
                   c.verified ? 'border-red-500/30 text-red-400' : 'border-blue-500/30 text-blue-400'
                 }`}
               >
-                {c.verified ? 'Revoke' : 'Verify'}
+                {c.verified ? 'Revoke' : 'Authorize'}
               </button>
             </div>
           ))}
-          {active.length === 0 && <p className="text-gray-500 text-sm">No active campaigns.</p>}
+          {active.length === 0 && <p className="text-gray-500 text-sm">No active campaign pages.</p>}
         </div>
       </section>
 

@@ -33,7 +33,7 @@ export default function QRCodeCard({ slug, title, campaignId }) {
       link.download = `campaignhub-${slug}-qr.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
-      toast('QR code downloaded', 'success');
+      toast('Official campaign QR code downloaded', 'success');
     };
     img.src = blobUrl;
   };
@@ -64,10 +64,10 @@ export default function QRCodeCard({ slug, title, campaignId }) {
 
       canvas.toBlob(async (pngBlob) => {
         await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-        toast('QR code copied to clipboard', 'success');
+        toast('Official campaign QR code copied to clipboard', 'success');
       });
     } catch {
-      toast('Copy not supported — use Download instead', 'warning');
+      toast('Copy not supported — download the campaign QR code instead', 'warning');
     }
   };
 
@@ -82,35 +82,38 @@ export default function QRCodeCard({ slug, title, campaignId }) {
         <h2>${title}</h2>
         ${svg.outerHTML}
         <p style="margin-top:16px;font-size:14px;color:#666;">${url}</p>
-        <p style="font-size:12px;color:#999;">Scan to view campaign on CampaignHub</p>
+        <p style="font-size:12px;color:#999;">Scan to open the official campaign page on CampaignHub</p>
       </body></html>
     `);
     printWindow.document.close();
     printWindow.focus();
     setTimeout(() => { printWindow.print(); printWindow.close(); }, 300);
-    toast('Print dialog opened', 'info');
+    toast('Print dialog opened for campaign QR code', 'info');
   };
 
   return (
     <div className="glass-card text-center" id="qr-print-area">
-      <h3 className="text-sm font-medium text-gray-300 mb-1">Campaign QR Code</h3>
-      <p className="text-xs text-gray-500 mb-4">Use on flyers, posters, banners & billboards</p>
+      <h3 className="text-sm font-medium text-gray-300 mb-1">Official Campaign QR Code</h3>
+      <p className="text-xs text-gray-500 mb-4">
+        Add to rally posters, flyers, and printed campaign materials so voters reach your official page
+      </p>
 
       <div ref={qrRef} className="inline-block p-4 bg-white rounded-xl shadow-lg">
         <QRCodeSVG value={url} size={180} level="H" includeMargin />
       </div>
 
       <p className="text-xs text-gray-500 mt-3 truncate max-w-xs mx-auto">{url}</p>
+      <p className="text-[10px] text-gray-600 mt-1">Scans open your official campaign page</p>
 
       <div className="flex flex-wrap justify-center gap-2 mt-5">
         <button onClick={handleDownload} className="btn-primary text-xs py-2 px-4">
-          Download QR
+          Download Campaign QR Code
         </button>
         <button onClick={handleCopyImage} className="btn-secondary text-xs py-2 px-4">
           Copy QR Image
         </button>
         <button onClick={handlePrint} className="btn-secondary text-xs py-2 px-4">
-          Print QR
+          Print Campaign QR Code
         </button>
       </div>
     </div>

@@ -1,25 +1,26 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Upload, CheckCircle2, Share2 } from 'lucide-react';
+import { Upload, ShieldCheck, Share2 } from 'lucide-react';
+import { BRAND_COPY } from '../data/brand';
 
 const steps = [
   {
     icon: Upload,
     step: '1',
-    title: 'Create for free',
-    description: 'Upload your banner, add details, and submit. Free campaigns include share links, QR codes, and basic analytics.',
+    title: 'Create your page',
+    description: 'Add your candidate photo, party logo, message, and official links. Political templates help you launch in minutes.',
   },
   {
-    icon: CheckCircle2,
+    icon: ShieldCheck,
     step: '2',
-    title: 'Admin approves',
-    description: 'We review every campaign for trust. Paid packages require Telecel Cash proof with your unique CH- reference.',
+    title: 'Request verification (optional)',
+    description: 'Apply for admin verification so voters know your page is authorized — not an impersonation.',
   },
   {
     icon: Share2,
     step: '3',
-    title: 'Grow & upgrade',
-    description: 'Share your campaign, track performance, and add premium boosts, AI, verified badges, or multi-platform formats when ready.',
+    title: 'Share one trusted link',
+    description: 'Put your URL and QR code on posters, WhatsApp, and radio. One official home for your campaign.',
   },
 ];
 
@@ -33,8 +34,8 @@ export default function HowItWorks() {
           viewport={{ once: true }}
           className="text-center mb-14"
         >
-          <h2 className="section-title">Simple, stable flow</h2>
-          <p className="section-subtitle mx-auto">Three steps. No clutter. No complicated marketing tools.</p>
+          <h2 className="section-title">Three steps to your official page</h2>
+          <p className="section-subtitle mx-auto">No complicated tools. Just a trusted public presence for your campaign.</p>
         </motion.div>
 
         <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
@@ -62,7 +63,7 @@ export default function HowItWorks() {
         </div>
 
         <div className="text-center mt-12">
-          <Link to="/upload" className="btn-primary px-8 py-3">Start Free</Link>
+          <Link to="/upload" className="btn-primary px-8 py-3">{BRAND_COPY.launchCta}</Link>
         </div>
       </div>
     </section>

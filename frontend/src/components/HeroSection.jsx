@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { BRAND, BRAND_COPY } from '../data/brand';
 
 export default function HeroSection({ campaignCount = 0 }) {
   return (
@@ -13,35 +14,35 @@ export default function HeroSection({ campaignCount = 0 }) {
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             {campaignCount > 0 && (
               <span className="inline-block px-3 py-1 mb-6 text-xs font-medium text-brand-300 bg-brand-600/10 border border-brand-500/20 rounded-full">
-                {campaignCount} live campaign{campaignCount !== 1 ? 's' : ''} · real-time from Firestore
+                {campaignCount} live campaign page{campaignCount !== 1 ? 's' : ''} in {BRAND.country}
               </span>
             )}
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.08] tracking-tight mb-6">
-              Your campaign
+              {BRAND_COPY.heroHeadline}
               <span className="block bg-gradient-to-r from-brand-300 to-brand-500 bg-clip-text text-transparent">
-                operating system.
+                {BRAND_COPY.heroHeadlineAccent}
               </span>
             </h1>
 
             <p className="text-lg text-gray-400 max-w-xl mb-8 leading-relaxed">
-              Launch, share, and track campaigns for businesses, politicians, creators, and organizations — free to start, trusted by design.
+              {BRAND_COPY.heroSubtext}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">
               <Link to="/upload" className="btn-primary text-base px-8 py-3.5 text-center">
-                Launch Free Campaign
+                {BRAND_COPY.launchCta}
               </Link>
               <Link to="/campaigns" className="btn-secondary text-base px-8 py-3.5 text-center">
-                Explore Campaigns
+                {BRAND_COPY.exploreCta}
               </Link>
             </div>
 
             <div className="flex flex-wrap gap-4 mt-10 text-xs text-gray-500">
-              <span>✓ Free hosting</span>
-              <span>✓ QR & share links</span>
-              <span>✓ Basic analytics</span>
-              <span>✓ Admin verified</span>
+              <span>✓ Official campaign URL</span>
+              <span>✓ QR for posters</span>
+              <span>✓ WhatsApp sharing</span>
+              <span>✓ Admin verification available</span>
             </div>
           </motion.div>
         </div>

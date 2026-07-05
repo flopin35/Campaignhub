@@ -35,7 +35,7 @@ export async function followCampaign(campaignId, userId, campaignTitle, ownerId)
   if (ownerId && ownerId !== userId) {
     await createNotification({
       userId: ownerId,
-      message: `New supporter for "${campaignTitle}"`,
+      message: `New supporter signed up for your campaign page "${campaignTitle}"`,
       type: 'new_follower',
       campaignId,
     });

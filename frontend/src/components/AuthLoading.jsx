@@ -5,7 +5,7 @@ import { Shield } from 'lucide-react';
 const DEFAULT_STAGES = [
   'Securing your session…',
   'Verifying credentials…',
-  'Restoring dashboard…',
+  'Loading your campaign pages…',
 ];
 
 export default function AuthLoading({

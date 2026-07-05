@@ -24,9 +24,12 @@ export function isOtpUser(user, profile) {
 }
 
 export function isUserVerified(user, profile) {
-  if (!user) return false;
+  if (!user?.uid) return false;
   if (isGoogleUser(user, profile) || isOtpUser(user, profile)) return true;
-  return user.emailVerified === true;
+  if (profile?.provider === 'google' || profile?.provider === 'otp') return true;
+  if (user.emailVerified === true) return true;
+  if (profile?.emailVerified === true) return true;
+  return false;
 }
 
 export function sanitizeEmail(email) {

@@ -1,13 +1,16 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import CampaignCard from '../components/CampaignCard';
 import CampaignSkeleton from '../components/CampaignSkeleton';
 import EmptyState from '../components/EmptyState';
 import { useCampaigns } from '../hooks/useCampaigns';
 import { useViralCampaigns } from '../hooks/useViralCampaigns';
+import { useAuth } from '../context/AuthContext';
 import { CATEGORIES, OFFICE_LEVELS } from '../utils/campaignHelpers';
 
 export default function Campaigns() {
+  const { user, isVerified } = useAuth();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [sort, setSort] = useState('newest');
@@ -16,7 +19,7 @@ export default function Campaigns() {
   const [office, setOffice] = useState('');
 
   const useViralSort = sort === 'trending';
-  const { campaigns: firestoreCampaigns, loading: fsLoading } = useCampaigns({
+  const { campaigns: firestoreCampaigns, loading: fsLoading, error: fsError } = useCampaigns({
     status: 'active',
     featured: featuredOnly || undefined,
     category: category || undefined,
@@ -29,6 +32,7 @@ export default function Campaigns() {
 
   const campaigns = sort === 'trending' ? viralCampaigns : firestoreCampaigns;
   const loading = sort === 'trending' ? viralLoading : fsLoading;
+  const loadError = sort === 'trending' ? null : fsError;
 
   const filtered = useMemo(() => {
     let list = campaigns;
@@ -96,8 +100,21 @@ export default function Campaigns() {
 
       {loading ? (
         <CampaignSkeleton />
+      ) : loadError ? (
+        <div className="text-center py-16 px-4">
+          <p className="text-red-400 mb-2">Could not load campaign pages</p>
+          <p className="text-gray-500 text-sm mb-4">{loadError}</p>
+          <button type="button" onClick={() => window.location.reload()} className="btn-secondary text-sm">
+            Try again
+          </button>
+        </div>
       ) : filtered.length === 0 ? (
-        <EmptyState title="No campaign pages found" description="Try adjusting your filters." actionLabel="Launch Campaign Page" actionTo="/upload" />
+        <EmptyState
+          title="No campaign pages found"
+          description={campaigns.length === 0 ? 'Be the first to launch an official campaign page.' : 'Try adjusting your filters.'}
+          actionLabel={user && isVerified ? 'Launch Campaign Page' : user ? 'Verify email to launch' : 'Create account'}
+          actionTo={user && isVerified ? '/upload' : user ? '/verify-email' : '/signup'}
+        />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((c, i) => <CampaignCard key={c.id} campaign={c} index={i} />)}

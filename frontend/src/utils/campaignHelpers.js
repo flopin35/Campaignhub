@@ -138,6 +138,23 @@ export function isCampaignVisible(campaign) {
   return campaign.status === 'active' && !campaign.isExpired && !campaign.disabled;
 }
 
+/** Ensure external links open correctly (not as relative paths). */
+export function normalizeExternalUrl(url) {
+  const trimmed = (url || '').trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+export function normalizeSocialLinks(links = {}) {
+  return {
+    facebook: normalizeExternalUrl(links.facebook),
+    twitter: normalizeExternalUrl(links.twitter),
+    instagram: normalizeExternalUrl(links.instagram),
+    website: normalizeExternalUrl(links.website),
+  };
+}
+
 /** Office level for political campaigns (stored in campaignType) */
 export const OFFICE_LEVELS = ['Presidential', 'Parliamentary', 'MMDCE', 'Party', 'Referendum'];
 

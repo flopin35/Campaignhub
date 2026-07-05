@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { useCampaigns } from './useCampaigns';
 import { getViralScore, getShareScore, getGrowthScore } from '../services/analyticsService';
+
+const ANALYTICS_POLL_MS = 90_000;
 
 function sortCampaigns(campaigns, analyticsMap, sortBy, limit) {
   const scored = campaigns.map((c) => {
@@ -45,22 +47,33 @@ export function useViralCampaigns({ sortBy = 'viral', limit = 6 } = {}) {
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, 'analytics'),
-      (snap) => {
+    let cancelled = false;
+    let timer;
+
+    const load = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'analytics'));
+        if (cancelled) return;
         const map = {};
         snap.docs.forEach((d) => {
           map[d.id] = d.data();
         });
         setAnalyticsMap(map);
         setAnalyticsLoading(false);
-      },
-      (err) => {
-        console.warn('Analytics listener skipped:', err.message);
+      } catch (err) {
+        if (cancelled) return;
+        console.warn('Analytics fetch skipped:', err.message);
         setAnalyticsLoading(false);
       }
-    );
-    return unsub;
+    };
+
+    load();
+    timer = setInterval(load, ANALYTICS_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
   }, []);
 
   const ranked = useMemo(

@@ -1,11 +1,8 @@
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from '../firebase/auth';
-import { isGoogleUser, isOtpUser } from './authService';
 
 function userCanUpload(user) {
-  if (!user) return false;
-  if (isGoogleUser(user) || isOtpUser(user)) return true;
-  return user.emailVerified === true;
+  return !!user?.uid;
 }
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB banners
@@ -65,7 +62,7 @@ function buildFilename(file, label) {
   return `${Date.now()}-${safeLabel}.${ext}`;
 }
 
-export function validateImageFile(file) {
+export function validateImageFile(file, maxSize = MAX_FILE_SIZE) {
   if (!file) {
     throw new StorageUploadError('No file selected.', 'storage/invalid-file');
   }
@@ -81,9 +78,10 @@ export function validateImageFile(file) {
     );
   }
 
-  if (file.size > MAX_FILE_SIZE) {
+  if (file.size > maxSize) {
+    const maxMb = maxSize >= 1024 * 1024 ? `${maxSize / (1024 * 1024)}MB` : `${Math.round(maxSize / 1024)}KB`;
     throw new StorageUploadError(
-      'File is too large. Maximum size is 5MB.',
+      `File is too large. Maximum size is ${maxMb}.`,
       'storage/file-too-large'
     );
   }

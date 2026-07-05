@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { generateSlug, appendSlugSuffix } from '../utils/slugGenerator';
-import { normalizeCampaign, addDays, toDate, sortCampaignsForDisplay } from '../utils/campaignHelpers';
+import { normalizeCampaign, addDays, toDate, sortCampaignsForDisplay, normalizeSocialLinks } from '../utils/campaignHelpers';
 import { uploadBanner, uploadGalleryImages, uploadLogo } from './storageService';
 import { auth, isAdmin } from '../firebase/auth';
 import { isUserVerified, getUserProfile } from './authService';
@@ -71,7 +71,11 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   if (!currentUser) throw new Error('You must be signed in to create a campaign');
   const profile = await getUserProfile(currentUser.uid);
   if (!isUserVerified(currentUser, profile)) {
-    throw new Error('Please sign in again before launching a campaign.');
+    const usesPassword = currentUser.providerData?.some((p) => p.providerId === 'password');
+    if (usesPassword && !currentUser.emailVerified) {
+      throw new Error('Verify your email before launching a campaign page.');
+    }
+    throw new Error('Your account must be verified before launching a campaign page.');
   }
   await currentUser.getIdToken(true);
 
@@ -112,12 +116,12 @@ export async function createCampaign({ form, bannerFile, logoFile, galleryFiles,
   const start = isFree ? new Date() : null;
   const end = isFree ? addDays(start, pkg.durationDays || 14) : null;
 
-  const socialLinks = {
-    facebook: form.socialFacebook?.trim() || '',
-    twitter: form.socialTwitter?.trim() || '',
-    instagram: form.socialInstagram?.trim() || '',
-    website: form.socialWebsite?.trim() || '',
-  };
+  const socialLinks = normalizeSocialLinks({
+    facebook: form.socialFacebook,
+    twitter: form.socialTwitter,
+    instagram: form.socialInstagram,
+    website: form.socialWebsite,
+  });
 
   const campaignData = {
     title: form.title,
@@ -282,6 +286,51 @@ export async function deleteCampaign(campaignId) {
     }
     throw err;
   }
+}
+
+/** Hide a live campaign page from the public directory without deleting records. */
+export async function hideCampaignFromPublic(campaignId) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('You must be signed in to hide a campaign page');
+
+  const ref = doc(db, CAMPAIGNS, campaignId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Campaign not found');
+  if (snap.data().ownerId !== currentUser.uid && !isAdmin(currentUser)) {
+    throw new Error('You can only hide your own campaign pages');
+  }
+
+  await updateDoc(ref, {
+    status: 'disabled',
+    disabled: true,
+    hiddenAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Restore a hidden campaign page to the public directory. */
+export async function relaunchCampaign(campaignId) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('You must be signed in to relaunch a campaign page');
+
+  const ref = doc(db, CAMPAIGNS, campaignId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Campaign not found');
+  if (snap.data().ownerId !== currentUser.uid && !isAdmin(currentUser)) {
+    throw new Error('You can only relaunch your own campaign pages');
+  }
+
+  const end = toDate(snap.data().endDate);
+  if (end && Date.now() > end.getTime()) {
+    throw new Error('This page has expired. Extend hosting before relaunching.');
+  }
+
+  await updateDoc(ref, {
+    status: 'active',
+    disabled: false,
+    hiddenAt: null,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function extendCampaign(campaignId, additionalDays, currentEndDate, currentDurationDays = 0) {

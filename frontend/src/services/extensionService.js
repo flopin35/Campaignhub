@@ -71,3 +71,10 @@ export function shouldShowExpiryWarning(campaign, daysThreshold = 3) {
   const daysLeft = campaign.remainingMs / (1000 * 60 * 60 * 24);
   return daysLeft <= daysThreshold && daysLeft > 0;
 }
+
+export async function recordExpiryWarning(campaignId) {
+  await updateDoc(doc(db, 'campaigns', campaignId), {
+    expiryWarningSentAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}

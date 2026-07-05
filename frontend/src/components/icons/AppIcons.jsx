@@ -38,6 +38,7 @@ export function Icon({ icon: IconComponent, className = 'w-4 h-4', ...props }) {
 
 export const NOTIFICATION_ICON_MAP = {
   campaign_approved: CheckCircle2,
+  campaign_live: CheckCircle2,
   campaign_rejected: XCircle,
   payment_approved: CreditCard,
   campaign_trending: Flame,

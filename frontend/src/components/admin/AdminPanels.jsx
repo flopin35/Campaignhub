@@ -29,7 +29,9 @@ export function AdminVerificationPanel({ campaigns }) {
   const toggleUser = async (u) => {
     setLoading(u.id);
     try {
-      await verifyUser(u.id, !u.verified);
+      const nextVerified = !u.verified;
+      await verifyUser(u.id, nextVerified);
+      setUsers((prev) => prev.map((row) => (row.id === u.id ? { ...row, verified: nextVerified } : row)));
       toast(u.verified ? 'User verification revoked' : 'User verified', 'success');
     } catch (err) {
       toast(err.message, 'error');

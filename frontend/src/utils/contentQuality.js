@@ -14,7 +14,7 @@ const SPAM_PATTERNS = [
 export const CONTENT_LIMITS = {
   titleMin: 5,
   titleMax: 120,
-  descriptionMin: 30,
+  descriptionMin: 21,
   descriptionMax: 2000,
 };
 

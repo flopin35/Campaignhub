@@ -126,7 +126,7 @@ export default function UploadCampaign() {
 
           message: 'Your campaign page is now live on CampaignHub!',
 
-          type: 'campaign_approved',
+          type: 'campaign_live',
 
           campaignId: created.id,
 

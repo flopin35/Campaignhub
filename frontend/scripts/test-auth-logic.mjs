@@ -52,6 +52,7 @@ test('sanitizeEmail trims and lowercases', () => {
 // --- Verified users ---
 test('Google user is verified without emailVerified flag', () => {
   const user = {
+    uid: 'google-user-1',
     emailVerified: false,
     providerData: [{ providerId: 'google.com' }],
   };
@@ -59,12 +60,12 @@ test('Google user is verified without emailVerified flag', () => {
 });
 
 test('OTP user is verified', () => {
-  const user = { emailVerified: false, providerData: [{ providerId: 'custom' }] };
+  const user = { uid: 'otp-user-1', emailVerified: false, providerData: [{ providerId: 'custom' }] };
   assert(isUserVerified(user, { provider: 'otp' }));
 });
 
 test('email user needs emailVerified', () => {
-  const user = { emailVerified: false, providerData: [{ providerId: 'password' }] };
+  const user = { uid: 'email-user-1', emailVerified: false, providerData: [{ providerId: 'password' }] };
   assert(!isUserVerified(user, { provider: 'email' }));
 });
 

@@ -65,7 +65,7 @@ function DetailRow({ label, value, mono = false, highlight = false, copyText = n
   );
 }
 
-export default function PaymentScreen({ pkg, paymentReference, onContinue, step = 2, embedded = false, hideContinue = false }) {
+export default function PaymentScreen({ pkg, paymentReference, onContinue, step = 1, embedded = false, hideContinue = false }) {
   const content = (
     <>
       <StepProgress step={step} embedded={embedded} />

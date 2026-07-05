@@ -12,11 +12,7 @@ service cloud.firestore {
     }
 
     function isVerifiedUser() {
-      return request.auth != null && (
-        request.auth.token.email_verified == true
-        || request.auth.token.firebase.sign_in_provider == 'google.com'
-        || request.auth.token.firebase.sign_in_provider == 'custom'
-      );
+      return request.auth != null;
     }
 
     function isPublicActiveCampaign() {
@@ -36,6 +32,33 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['extensionPending', 'updatedAt']);
+    }
+
+    function ownerCanHideCampaign() {
+      return isVerifiedUser()
+        && resource.data.ownerId == request.auth.uid
+        && resource.data.status == 'active'
+        && request.resource.data.status == 'disabled'
+        && request.resource.data.disabled == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'disabled', 'hiddenAt', 'updatedAt']);
+    }
+
+    function ownerCanRelaunchCampaign() {
+      return isVerifiedUser()
+        && resource.data.ownerId == request.auth.uid
+        && resource.data.status == 'disabled'
+        && request.resource.data.status == 'active'
+        && request.resource.data.disabled == false
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'disabled', 'hiddenAt', 'updatedAt']);
+    }
+
+    function ownerCanRecordExpiryWarning() {
+      return isVerifiedUser()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['expiryWarningSentAt', 'updatedAt']);
     }
 
     function onlyAnalyticsFieldsChanged() {
@@ -74,15 +97,26 @@ service cloud.firestore {
         || isAdmin();
       allow create: if isVerifiedUser()
         && request.resource.data.ownerId == request.auth.uid
-        && request.resource.data.status in ['payment_pending', 'pending_review']
+        && request.resource.data.status in ['payment_pending', 'pending_review', 'active']
+        && (
+          request.resource.data.status in ['payment_pending', 'pending_review']
+          || (request.resource.data.status == 'active'
+              && request.resource.data.packageType == 'free'
+              && request.resource.data.startDate != null
+              && request.resource.data.endDate != null)
+        )
         && request.resource.data.views == 0
         && request.resource.data.shares == 0
         && request.resource.data.clicks == 0;
       allow update: if isAdmin()
         || ownerCanUpdateCampaign()
+        || ownerCanHideCampaign()
+        || ownerCanRelaunchCampaign()
+        || ownerCanRecordExpiryWarning()
         || ownerCanRequestExtension()
         || (isPublicActiveCampaign() && onlyAnalyticsFieldsChanged());
-      allow delete: if isAdmin();
+      allow delete: if isAdmin()
+        || (request.auth != null && resource.data.ownerId == request.auth.uid);
     }
 
     match /analytics/{campaignId} {
@@ -118,15 +152,29 @@ service cloud.firestore {
       allow read, update: if isAdmin();
     }
 
+    function ownerPaymentProofUpdate() {
+      return request.auth != null
+        && resource.data.userId == request.auth.uid
+        && resource.data.paymentStatus == 'pending'
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.paymentStatus == 'pending_review'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['screenshotUrl', 'paymentStatus', 'proofSubmittedAt']);
+    }
+
     match /payments/{paymentId} {
       allow read: if isAdmin()
         || (request.auth != null && resource.data.userId == request.auth.uid);
-      allow create: if isVerifiedUser()
-        && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin()
-        || (isVerifiedUser()
-            && resource.data.userId == request.auth.uid
-            && resource.data.paymentStatus in ['pending', 'pending_review']);
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.paymentStatus == 'pending'
+        && request.resource.data.campaignId is string
+        && request.resource.data.paymentReference is string
+        && request.resource.data.amount is number
+        && request.resource.data.amount > 0
+        && request.resource.data.packageName is string
+        && request.resource.data.packageId is string;
+      allow update: if isAdmin() || ownerPaymentProofUpdate();
       allow delete: if isAdmin();
     }
 
@@ -138,6 +186,60 @@ service cloud.firestore {
       allow update: if request.auth != null
         && resource.data.userId == request.auth.uid;
       allow delete: if isAdmin();
+    }
+
+    function isCampaignOwner(campaignId) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/campaigns/$(campaignId)).data.ownerId == request.auth.uid;
+    }
+
+    match /supporters/{supporterId} {
+      allow read: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+      allow create: if request.resource.data.campaignId is string
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() >= 9;
+      allow update: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+      allow delete: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+    }
+
+    match /donations/{donationId} {
+      allow read: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+      allow create: if request.resource.data.campaignId is string
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 5
+        && request.resource.data.donorName is string
+        && request.resource.data.donorPhone is string
+        && request.resource.data.paymentStatus == 'pending';
+      allow update: if isAdmin()
+        || isCampaignOwner(resource.data.campaignId)
+        || (request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['screenshotUrl', 'paymentStatus', 'proofSubmittedAt', 'updatedAt'])
+            && resource.data.paymentStatus == 'pending'
+            && request.resource.data.paymentStatus == 'pending_review');
+      allow delete: if isAdmin();
+    }
+
+    match /volunteers/{volunteerId} {
+      allow read: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+      allow create: if request.resource.data.campaignId is string
+        && request.resource.data.name is string
+        && request.resource.data.phone is string
+        && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+      allow delete: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+    }
+
+    match /campaign_events/{eventId} {
+      allow read: if true;
+      allow create: if isVerifiedUser()
+        && isCampaignOwner(request.resource.data.campaignId);
+      allow update: if isAdmin()
+        || isCampaignOwner(resource.data.campaignId)
+        || (request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['rsvpCount', 'checkInCount', 'updatedAt']));
+      allow delete: if isAdmin() || isCampaignOwner(resource.data.campaignId);
     }
 
     // WebCraft GH — website request submissions (NF project)

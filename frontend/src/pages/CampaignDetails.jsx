@@ -13,20 +13,26 @@ import { trackVisit } from '../services/analyticsService';
 import { getReferralSource } from '../utils/sharing';
 import { LayoutDashboard } from 'lucide-react';
 import { formatDate, getStatusBadgeClass } from '../utils/helpers';
+import { getStatusLabel, normalizeExternalUrl } from '../utils/campaignHelpers';
 import { createNotification } from '../services/notificationService';
-import { shouldShowExpiryWarning } from '../services/extensionService';
+import { shouldShowExpiryWarning, recordExpiryWarning } from '../services/extensionService';
 
 export default function CampaignDetails() {
   const { slug } = useParams();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  const { campaign, loading, error } = useCampaign(slug);
+  const { campaign, loading, error } = useCampaign(slug, { ownerId: user?.uid });
   const [viewTracked, setViewTracked] = useState(false);
   const [showExtend, setShowExtend] = useState(false);
-  const [expiryNotified, setExpiryNotified] = useState(false);
 
   useEffect(() => {
-    if (campaign?.id && campaign.status === 'active' && !viewTracked) {
+    if (
+      campaign?.id
+      && campaign.status === 'active'
+      && !campaign.isExpired
+      && !campaign.disabled
+      && !viewTracked
+    ) {
       const referral = getReferralSource(searchParams);
       trackVisit(campaign.id, referral).catch(console.error);
       setViewTracked(true);
@@ -38,17 +44,18 @@ export default function CampaignDetails() {
       campaign?.ownerId &&
       user?.uid === campaign.ownerId &&
       shouldShowExpiryWarning(campaign) &&
-      !expiryNotified
+      !campaign.expiryWarningSentAt
     ) {
       createNotification({
         userId: user.uid,
         message: `Your campaign page "${campaign.title}" expires in ${Math.ceil(campaign.remainingMs / 86400000)} days`,
         type: 'campaign_expiring',
         campaignId: campaign.id,
-      }).catch(() => {});
-      setExpiryNotified(true);
+      })
+        .then(() => recordExpiryWarning(campaign.id))
+        .catch(() => {});
     }
-  }, [campaign, user, expiryNotified]);
+  }, [campaign, user]);
 
   if (loading) {
     return (
@@ -58,7 +65,13 @@ export default function CampaignDetails() {
     );
   }
 
-  if (error || !campaign || campaign.status !== 'active' || campaign.isExpired) {
+  const isOwner = user?.uid === campaign?.ownerId;
+  const isPublicVisible = campaign
+    && campaign.status === 'active'
+    && !campaign.isExpired
+    && !campaign.disabled;
+
+  if (error || !campaign) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center">
         <h2 className="text-2xl font-bold text-white mb-2">Campaign page not found</h2>
@@ -68,7 +81,15 @@ export default function CampaignDetails() {
     );
   }
 
-  const isOwner = user?.uid === campaign.ownerId;
+  if (!isPublicVisible && !isOwner) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+        <h2 className="text-2xl font-bold text-white mb-2">Campaign page not found</h2>
+        <p className="text-gray-400 mb-6">This official campaign page may be hidden, archived, or not yet published.</p>
+        <Link to="/campaigns" className="btn-primary">Campaign Directory</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -82,10 +103,20 @@ export default function CampaignDetails() {
           )}
         </div>
 
+        {isOwner && !isPublicVisible && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
+            Owner preview — this page is not publicly visible
+            {campaign.status === 'disabled' || campaign.disabled ? ' (hidden from directory)' : ''}
+            {campaign.status === 'payment_pending' ? ' (awaiting payment)' : ''}
+            {campaign.status === 'pending_review' ? ' (awaiting admin review)' : ''}
+            {campaign.isExpired ? ' (expired)' : ''}.
+          </div>
+        )}
+
         {isOwner && <ExtendCampaignBanner campaign={campaign} onExtend={() => setShowExtend(true)} />}
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
-          <span className={getStatusBadgeClass(campaign.status)}>{campaign.status}</span>
+          <span className={getStatusBadgeClass(campaign.status)}>{getStatusLabel(campaign.status)}</span>
           <VerificationBadge verified={campaign.verified} />
           {campaign.verificationRequested && !campaign.verified && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
@@ -149,16 +180,16 @@ export default function CampaignDetails() {
               <h3 className="text-sm font-medium text-gray-500 mb-3">Official Links</h3>
               <div className="space-y-2 text-sm">
                 {campaign.socialLinks.website && (
-                  <a href={campaign.socialLinks.website} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">Website</a>
+                  <a href={normalizeExternalUrl(campaign.socialLinks.website)} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">Website</a>
                 )}
                 {campaign.socialLinks.facebook && (
-                  <a href={campaign.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">Facebook</a>
+                  <a href={normalizeExternalUrl(campaign.socialLinks.facebook)} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">Facebook</a>
                 )}
                 {campaign.socialLinks.twitter && (
-                  <a href={campaign.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">X / Twitter</a>
+                  <a href={normalizeExternalUrl(campaign.socialLinks.twitter)} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">X / Twitter</a>
                 )}
                 {campaign.socialLinks.instagram && (
-                  <a href={campaign.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">Instagram</a>
+                  <a href={normalizeExternalUrl(campaign.socialLinks.instagram)} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline block truncate">Instagram</a>
                 )}
               </div>
             </div>

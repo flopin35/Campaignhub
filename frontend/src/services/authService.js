@@ -83,7 +83,7 @@ function buildProfileData(user, name = '', extras = {}) {
     photoURL: user.photoURL || '',
     provider,
     verified: provider === 'google' || provider === 'otp' ? true : !!user.emailVerified,
-    emailVerified: provider === 'otp' ? true : !!user.emailVerified,
+    emailVerified: provider === 'google' || provider === 'otp' ? true : !!user.emailVerified,
     role: resolveUserRole(user),
     premiumStatus: extras.premiumStatus || 'free',
     campaignsCreated: extras.campaignsCreated ?? 0,
@@ -144,8 +144,10 @@ export async function signUpWithEmail(name, email, password) {
 export async function loginWithEmail(email, password) {
   const credential = await signInWithEmailAndPassword(auth, email, password);
   rememberAuthProvider('email');
-  const profile = await saveUserToFirestore(credential.user);
-  return { user: credential.user, profile };
+  await credential.user.reload();
+  await credential.user.getIdToken(true);
+  const profile = await saveUserToFirestore(credential.user, '', { provider: 'email' });
+  return { user: auth.currentUser, profile };
 }
 
 export async function signInWithOtpCustomToken(customToken) {

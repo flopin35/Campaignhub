@@ -33,6 +33,9 @@ export default function CampaignWorkspace({
   compact = false,
   onExtend,
   onDelete,
+  onRelaunch,
+  relaunching = false,
+  hiding = false,
 }) {
   const { openPremiumModal, openAdBoostModal } = usePremiumModal();
   const { toast } = useToast();
@@ -147,9 +150,19 @@ export default function CampaignWorkspace({
           {campaign.status === 'active' && onExtend && (
             <button type="button" onClick={onExtend} className="btn-secondary text-xs py-2.5 px-3">Extend</button>
           )}
+          {onRelaunch && (
+            <button
+              type="button"
+              onClick={onRelaunch}
+              disabled={relaunching}
+              className="btn-primary text-xs py-2.5 px-3 disabled:opacity-50"
+            >
+              {relaunching ? 'Relaunching…' : 'Relaunch page'}
+            </button>
+          )}
           {onDelete && (
-            <button type="button" onClick={onDelete} className="text-xs py-2.5 px-3 min-h-[44px] rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 touch-manipulation">
-              {campaign.status === 'active' && !campaign.isExpired ? 'Hide page' : 'Remove archived page'}
+            <button type="button" onClick={onDelete} disabled={hiding} className="text-xs py-2.5 px-3 min-h-[44px] rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 touch-manipulation disabled:opacity-50">
+              {hiding ? 'Working…' : campaign.status === 'active' && !campaign.isExpired ? 'Hide page' : 'Remove archived page'}
             </button>
           )}
         </div>

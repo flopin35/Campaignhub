@@ -12,7 +12,7 @@ import CampaignWorkspace from '../components/CampaignWorkspace';
 import { PREMIUM_FEATURE_IDS, getPurchasablePlan } from '../data/premiumPackages';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/auth';
-import { deleteCampaign } from '../services/campaignFirestoreService';
+import { deleteCampaign, hideCampaignFromPublic, relaunchCampaign } from '../services/campaignFirestoreService';
 import { CheckCircle2, Plus, Sparkles, Bell } from 'lucide-react';
 import { getStatusLabel } from '../utils/campaignHelpers';
 import { getStatusBadgeClass } from '../utils/helpers';
@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [extendCampaign, setExtendCampaign] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [relaunchingId, setRelaunchingId] = useState(null);
 
   const selectedSlug = searchParams.get('campaign');
   const activeTab = searchParams.get('tab') || 'overview';
@@ -85,13 +86,20 @@ export default function Dashboard() {
   useEffect(() => {
     if (loading || myCampaigns.length === 0) return;
     if (selectedSlug && myCampaigns.some((c) => c.slug === selectedSlug)) return;
+    if (selectedSlug && myCampaigns.length > 1) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('campaign');
+      setSearchParams(next, { replace: true });
+      return;
+    }
     if (myCampaigns.length === 1 && !selectedSlug) {
       setSelected(myCampaigns[0], activeTab);
     }
   }, [loading, myCampaigns, selectedSlug, activeTab]);
 
-  const handleDelete = async (campaign) => {
+  const handleHideOrDelete = async (campaign) => {
     const isLive = campaign.status === 'active' && !campaign.isExpired;
+    const isHidden = campaign.status === 'disabled' || campaign.disabled;
     const message = isLive
       ? `Hide "${campaign.title}" from the public directory? The official campaign page will go offline immediately. You can relaunch later.`
       : `Permanently remove the archived page for "${campaign.title}"? This cannot be undone — records may be retained per platform policy.`;
@@ -99,13 +107,31 @@ export default function Dashboard() {
 
     setDeletingId(campaign.id);
     try {
-      await deleteCampaign(campaign.id);
-      if (selectedCampaign?.id === campaign.id) setSelected(null);
-      toast(isLive ? 'Campaign page hidden from directory' : 'Archived page removed', 'success');
+      if (isLive) {
+        await hideCampaignFromPublic(campaign.id);
+        toast('Campaign page hidden from directory', 'success');
+      } else {
+        await deleteCampaign(campaign.id);
+        if (selectedCampaign?.id === campaign.id) setSelected(null);
+        toast('Archived page removed', 'success');
+      }
     } catch (err) {
-      toast(err.message || 'Failed to delete', 'error');
+      toast(err.message || 'Action failed', 'error');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleRelaunch = async (campaign) => {
+    if (!window.confirm(`Relaunch "${campaign.title}" on the public directory?`)) return;
+    setRelaunchingId(campaign.id);
+    try {
+      await relaunchCampaign(campaign.id);
+      toast('Campaign page is live again', 'success');
+    } catch (err) {
+      toast(err.message || 'Failed to relaunch', 'error');
+    } finally {
+      setRelaunchingId(null);
     }
   };
 
@@ -249,7 +275,14 @@ export default function Dashboard() {
                 activeTab={activeTab}
                 onTabChange={setTab}
                 onExtend={selectedCampaign?.status === 'active' ? () => setExtendCampaign(selectedCampaign) : undefined}
-                onDelete={selectedCampaign ? () => handleDelete(selectedCampaign) : undefined}
+                onDelete={selectedCampaign ? () => handleHideOrDelete(selectedCampaign) : undefined}
+                onRelaunch={
+                  selectedCampaign && (selectedCampaign.status === 'disabled' || selectedCampaign.disabled)
+                    ? () => handleRelaunch(selectedCampaign)
+                    : undefined
+                }
+                relaunching={relaunchingId === selectedCampaign?.id}
+                hiding={deletingId === selectedCampaign?.id}
               />
             </main>
           </div>

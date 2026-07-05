@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePremiumModal } from '../context/PremiumModalContext';
 import { useToast } from '../context/ToastContext';
-import { hasCampaignCrm, canAccessWorkspaceTab, canAccessDistribution, canAccessCrm } from '../utils/featureAccess';
+import { hasCampaignCrm, canAccessWorkspaceTab, canAccessDistribution, canAccessCrm, hasPremiumSubscription } from '../utils/featureAccess';
 import PremiumGate from './PremiumGate';
+import PremiumActiveBadge from './PremiumActiveBadge';
 import { subscribeSupporters, aggregateSupportersByRegion, aggregateSupportersByConstituency } from '../services/supporterService';
 import { subscribeDonations, getDonationStats, verifyDonation } from '../services/donationService';
 import { subscribeVolunteers, updateVolunteerStatus, getVolunteerStats } from '../services/volunteerService';
@@ -50,6 +51,7 @@ export default function CampaignWorkspace({
   const [creatingEvent, setCreatingEvent] = useState(false);
 
   const crmUnlocked = hasCampaignCrm(campaign);
+  const premiumActive = hasPremiumSubscription(campaign);
   const distributeUnlocked = canAccessDistribution(campaign);
   const donationStats = getDonationStats(donations);
   const volunteerStats = getVolunteerStats(volunteers);
@@ -168,7 +170,9 @@ export default function CampaignWorkspace({
         </div>
       </div>
 
-      {!crmUnlocked && (
+      {premiumActive ? (
+        <PremiumActiveBadge campaign={campaign} variant="banner" />
+      ) : !crmUnlocked ? (
         <div className="p-3 rounded-xl bg-brand-600/10 border border-brand-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Lock className="w-4 h-4 text-brand-400 shrink-0" />
@@ -178,7 +182,7 @@ export default function CampaignWorkspace({
             Upgrade ₵500/mo
           </button>
         </div>
-      )}
+      ) : null}
 
       {/* Mini stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

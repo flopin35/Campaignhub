@@ -26,6 +26,8 @@ import WhyUpgradeSection from '../components/WhyUpgradeSection';
 import TrustPaymentBlock from '../components/TrustPaymentBlock';
 
 import { usePremiumModal } from '../context/PremiumModalContext';
+import { useMyCampaignsPremium } from '../hooks/useMyCampaignsPremium';
+import PremiumActiveBadge from '../components/PremiumActiveBadge';
 
 
 
@@ -36,6 +38,7 @@ const boostPlan = PREMIUM_PACKAGES[0];
 export default function Premium() {
 
   const { openPremiumModal, openAdBoostModal } = usePremiumModal();
+  const { hasAnyPremium, primaryPremiumCampaign } = useMyCampaignsPremium();
 
 
 
@@ -66,9 +69,9 @@ export default function Premium() {
             </h1>
 
             <p className="text-gray-400 text-sm sm:text-base leading-relaxed max-w-lg mx-auto">
-
-              CampaignHub Premium — ₵500/month for admin verification, extended hosting, AI message support, and directory visibility. Ad boosts sold separately.
-
+              {hasAnyPremium
+                ? 'Your CampaignHub Premium subscription is active — manage boosts and hosting extensions below.'
+                : 'CampaignHub Premium — ₵500/month for admin verification, extended hosting, AI message support, and directory visibility. Ad boosts sold separately.'}
             </p>
 
           </motion.div>
@@ -81,7 +84,16 @@ export default function Premium() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 space-y-14 sm:space-y-16">
 
-        <WhyUpgradeSection />
+        {hasAnyPremium && primaryPremiumCampaign && (
+          <section className="page-section">
+            <PremiumActiveBadge campaign={primaryPremiumCampaign} variant="banner" />
+            <p className="text-sm text-gray-500 mt-4 text-center max-w-xl mx-auto">
+              Your ₵500/month subscription is active. Ad boosts and extended hosting are still available below.
+            </p>
+          </section>
+        )}
+
+        {!hasAnyPremium && <WhyUpgradeSection />}
 
 
 
@@ -118,7 +130,7 @@ export default function Premium() {
 
 
         {/* Main subscription */}
-
+        {!hasAnyPremium && (
         <section className="page-section">
 
           <h2 className="section-title mb-2">CampaignHub Premium</h2>
@@ -132,11 +144,12 @@ export default function Premium() {
           </div>
 
         </section>
+        )}
 
 
 
         {/* Included features */}
-
+        {!hasAnyPremium && (
         <section className="page-section">
 
           <h2 className="section-title mb-2">Everything included</h2>
@@ -182,10 +195,7 @@ export default function Premium() {
           </div>
 
         </section>
-
-
-
-        {/* Ad boost — separate pricing */}
+        )}
         <section className="page-section">
           <h2 className="section-title mb-2">Ad Boost</h2>
           <p className="section-subtitle mb-6">

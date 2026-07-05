@@ -10,6 +10,8 @@ import EmptyState from '../components/EmptyState';
 import ExtendCampaignModal, { ExtendCampaignBanner } from '../components/ExtendCampaignModal';
 import CampaignWorkspace from '../components/CampaignWorkspace';
 import { PREMIUM_FEATURE_IDS, getPurchasablePlan } from '../data/premiumPackages';
+import { hasPremiumSubscription } from '../utils/featureAccess';
+import PremiumActiveBadge from '../components/PremiumActiveBadge';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { deleteCampaign, hideCampaignFromPublic, relaunchCampaign } from '../services/campaignFirestoreService';
@@ -135,6 +137,7 @@ export default function Dashboard() {
     }
   };
 
+  const selectedIsPremium = hasPremiumSubscription(selectedCampaign);
   const active = myCampaigns.filter((c) => c.status === 'active' && !c.isExpired);
   const totalViews = myCampaigns.reduce((s, c) => s + (c.views || 0), 0);
   const totalSupporters = myCampaigns.reduce((s, c) => s + (c.followerCount || 0), 0);
@@ -164,9 +167,13 @@ export default function Dashboard() {
                 <Plus className="w-4 h-4" /> {BRAND_COPY.launchCta}
               </Link>
             )}
-            <button type="button" onClick={() => openPremiumModal({ planId: PREMIUM_FEATURE_IDS.PREMIUM_SUBSCRIPTION, campaign: selectedCampaign })} className="btn-secondary text-sm inline-flex items-center justify-center gap-1.5">
-              <Sparkles className="w-4 h-4" /> Premium
-            </button>
+            {selectedIsPremium ? (
+              <PremiumActiveBadge campaign={selectedCampaign} className="col-span-2 sm:col-span-1" />
+            ) : (
+              <button type="button" onClick={() => openPremiumModal({ planId: PREMIUM_FEATURE_IDS.PREMIUM_SUBSCRIPTION, campaign: selectedCampaign })} className="btn-secondary text-sm inline-flex items-center justify-center gap-1.5">
+                <Sparkles className="w-4 h-4" /> Premium
+              </button>
+            )}
             <Link to="/notifications" className="btn-secondary text-sm p-2.5 hidden sm:inline-flex" aria-label="Notifications">
               <Bell className="w-4 h-4" />
             </Link>

@@ -1,6 +1,7 @@
 import { Lock, Sparkles } from 'lucide-react';
 import { usePremiumModal } from '../context/PremiumModalContext';
 import { PREMIUM_FEATURE_IDS } from '../data/premiumPackages';
+import { hasPremiumSubscription } from '../utils/featureAccess';
 
 const MESSAGES = {
   distribute: {
@@ -34,6 +35,8 @@ export default function PremiumGate({
 }) {
   const { openPremiumModal } = usePremiumModal();
   const copy = MESSAGES[feature] || MESSAGES.default;
+
+  if (hasPremiumSubscription(campaign)) return null;
 
   const handleUpgrade = () => {
     openPremiumModal({

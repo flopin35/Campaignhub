@@ -1,10 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LayoutGrid, PlusCircle, LayoutDashboard, Shield } from 'lucide-react';
+import { Home, LayoutGrid, PlusCircle, LayoutDashboard, Shield, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useMyCampaignsPremium } from '../hooks/useMyCampaignsPremium';
 
 export default function MobileNav() {
   const location = useLocation();
   const { isAuthenticated, isVerified } = useAuth();
+  const { hasAnyPremium } = useMyCampaignsPremium();
 
   const links = [
     { to: '/', label: 'Home', icon: Home },
@@ -12,7 +14,7 @@ export default function MobileNav() {
     ...(isAuthenticated && isVerified
       ? [{ to: '/upload', label: 'Launch', icon: PlusCircle, highlight: true }]
       : []),
-    { to: '/premium', label: 'Premium', icon: Shield },
+    { to: '/premium', label: hasAnyPremium ? 'Premium ✓' : 'Premium', icon: hasAnyPremium ? Sparkles : Shield },
     ...(isAuthenticated
       ? [{ to: '/dashboard', label: 'Campaign Pages', icon: LayoutDashboard }]
       : [{ to: '/login', label: 'Sign In', icon: LayoutDashboard }]),
@@ -31,7 +33,9 @@ export default function MobileNav() {
               className={`flex flex-col items-center justify-center gap-0.5 min-w-[3.5rem] py-1 rounded-lg transition-colors ${
                 active
                   ? 'text-brand-400'
-                  : link.highlight
+                  : link.to === '/premium' && hasAnyPremium
+                    ? 'text-emerald-400'
+                    : link.highlight
                     ? 'text-brand-400'
                     : 'text-gray-500 hover:text-gray-300'
               }`}

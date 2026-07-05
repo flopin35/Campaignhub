@@ -23,6 +23,20 @@ export function hasPremiumSubscription(campaign) {
   return SUBSCRIPTION_PACKAGE.includes.every((id) => hasPremiumFeature(campaign, id));
 }
 
+/** Human-readable premium status for active subscribers */
+export function getPremiumExpiryLabel(campaign) {
+  if (!hasPremiumSubscription(campaign)) return '';
+  const features = getCampaignPremiumFeatures(campaign);
+  const entry = features[PREMIUM_FEATURE_IDS.PREMIUM_SUBSCRIPTION]
+    || SUBSCRIPTION_PACKAGE.includes.map((id) => features[id]).find(isActiveEntry);
+  if (!entry?.expiresAt) return 'Active';
+  const exp = entry.expiresAt?.toDate?.() || new Date(entry.expiresAt);
+  const days = Math.ceil((exp.getTime() - Date.now()) / 86400000);
+  if (days <= 0) return 'Renews soon';
+  if (days === 1) return '1 day left';
+  return `${days} days left`;
+}
+
 export function hasAdvancedAnalytics(campaign) {
   return hasPremiumFeature(campaign, PREMIUM_FEATURE_IDS.ADVANCED_ANALYTICS)
     || hasPremiumSubscription(campaign);

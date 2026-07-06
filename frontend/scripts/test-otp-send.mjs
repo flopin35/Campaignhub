@@ -8,9 +8,9 @@ import { fileURLToPath } from 'url';
 import handler from '../api/auth/otp-send.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const repoRoot = join(root, '..');
 
-function loadEnvFile(name) {
-  const path = join(root, name);
+function loadEnvFile(path) {
   if (!existsSync(path)) return;
   for (const line of readFileSync(path, 'utf8').split('\n')) {
     const trimmed = line.trim();
@@ -22,12 +22,19 @@ function loadEnvFile(name) {
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
+    val = val.replace(/\\n/g, '\n');
     if (process.env[key] == null || process.env[key] === '') process.env[key] = val;
   }
 }
 
-loadEnvFile('.env');
-loadEnvFile('.env.local');
+loadEnvFile(join(root, '.env'));
+loadEnvFile(join(root, '.env.local'));
+loadEnvFile(join(repoRoot, 'backend', '.env'));
+
+// Local tests: log code to terminal when Gmail is not configured in .env
+if (!process.env.VERCEL && process.env.OTP_DEV_LOG !== 'false') {
+  process.env.OTP_DEV_LOG = 'true';
+}
 
 const email = process.argv[2] || 'test@example.com';
 

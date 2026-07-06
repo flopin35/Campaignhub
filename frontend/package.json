@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:auth": "node scripts/test-auth-logic.mjs && node scripts/test-email-verification.mjs",
     "test:otp": "node scripts/test-otp-send.mjs",
+    "test:otp:prod": "node scripts/test-otp-production.mjs",
     "test:smoke": "node scripts/smoke-test-production.mjs",
     "test:ai": "node scripts/test-production-ai.mjs"
   },

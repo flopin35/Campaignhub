@@ -7,6 +7,8 @@ const OTP_EXPIRY_MS = 5 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_SENDS_PER_HOUR = 5;
 const MAX_VERIFY_ATTEMPTS = 5;
+const OTP_FALLBACK_SECRET = 'campaignhub-otp-secret-change-me';
+const DEFAULT_SMTP_USER = 'campaignhubgh@gmail.com';
 
 export function hashOtp(code, salt, secret) {
   return createHash('sha256').update(`${code}:${salt}:${secret}`).digest('hex');
@@ -25,7 +27,47 @@ export function emailDocId(email) {
 }
 
 function otpSecret() {
-  return process.env.OTP_SECRET || process.env.JWT_SECRET || 'campaignhub-otp-secret-change-me';
+  return process.env.OTP_SECRET || process.env.JWT_SECRET || OTP_FALLBACK_SECRET;
+}
+
+function getSmtpCredentials() {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER || DEFAULT_SMTP_USER;
+  const pass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || '').replace(/\s/g, '');
+  return pass ? { user, pass } : null;
+}
+
+function getResendApiKey() {
+  const key = (process.env.RESEND_API_KEY || '').trim();
+  if (!key || !key.startsWith('re_') || key.includes('your_')) return null;
+  return key;
+}
+
+async function sendViaResend(to, code, html) {
+  const resendKey = getResendApiKey();
+  if (!resendKey) return false;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: process.env.OTP_EMAIL_FROM || 'CampaignHub <onboarding@resend.dev>',
+        to: [to],
+        subject: `${code} is your CampaignHub login code`,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      console.error('[OTP] Resend failed:', await res.text());
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[OTP] Resend error:', err.message);
+    return false;
+  }
 }
 
 async function sendOtpEmail(to, code) {
@@ -37,46 +79,35 @@ async function sendOtpEmail(to, code) {
     </div>
   `;
 
-  if (process.env.RESEND_API_KEY) {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.OTP_EMAIL_FROM || 'CampaignHub <onboarding@resend.dev>',
-        to: [to],
+  const creds = getSmtpCredentials();
+  if (creds) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: { user: creds.user, pass: creds.pass },
+      });
+      await transporter.sendMail({
+        from: process.env.OTP_EMAIL_FROM || `CampaignHub <${creds.user}>`,
+        to,
         subject: `${code} is your CampaignHub login code`,
         html,
-      }),
-    });
-    if (!res.ok) throw new Error(`Email failed: ${await res.text()}`);
-    return;
+      });
+      return;
+    } catch (err) {
+      throw new Error(`Gmail SMTP failed: ${err.message}`);
+    }
   }
 
-  if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    });
-    await transporter.sendMail({
-      from: process.env.OTP_EMAIL_FROM || process.env.SMTP_USER,
-      to,
-      subject: `${code} is your CampaignHub login code`,
-      html,
-    });
-    return;
-  }
+  if (await sendViaResend(to, code, html)) return;
 
   if (process.env.OTP_DEV_LOG === 'true' || process.env.NODE_ENV !== 'production') {
     console.info('[OTP] Dev code for', to, ':', code);
     return;
   }
 
-  throw new Error('Set RESEND_API_KEY or SMTP_USER + SMTP_PASS to send OTP emails.');
+  throw new Error('Set GMAIL_APP_PASSWORD (or SMTP_PASS) or a valid RESEND_API_KEY to send OTP emails.');
 }
 
 export async function sendOtpHandler(email) {

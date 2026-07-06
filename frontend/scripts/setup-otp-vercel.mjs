@@ -12,11 +12,17 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const jsonPath = process.argv[2];
-const resendKey = process.argv[3];
+const arg3 = process.argv[3];
+const arg4 = process.argv[4];
+
+// Gmail app password as 3rd arg, or 4th when Resend key is skipped with "-"
+const resendKey = arg3 && arg3 !== '-' && arg3.startsWith('re_') ? arg3 : null;
+const gmailAppPassword = (arg4 && arg4 !== '-') ? arg4 : ((!arg3 || arg3 === '-') ? null : (!arg3.startsWith('re_') ? arg3.replace(/\s/g, '') : null));
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 if (!jsonPath || !existsSync(jsonPath)) {
-  console.error('Usage: node scripts/setup-otp-vercel.mjs <serviceAccount.json> [RESEND_API_KEY]');
+  console.error('Usage: node scripts/setup-otp-vercel.mjs <serviceAccount.json> [RESEND_API_KEY|-] [GMAIL_APP_PASSWORD]');
+  console.error('  Or:   node scripts/setup-otp-vercel.mjs <serviceAccount.json> GMAIL_APP_PASSWORD');
   process.exit(1);
 }
 
@@ -34,6 +40,20 @@ const vars = {
 
 if (resendKey) vars.RESEND_API_KEY = resendKey;
 
+if (gmailAppPassword) {
+  vars.SMTP_USER = 'campaignhubgh@gmail.com';
+  vars.SMTP_PASS = gmailAppPassword.replace(/\s/g, '');
+  vars.GMAIL_APP_PASSWORD = gmailAppPassword.replace(/\s/g, '');
+  vars.SMTP_HOST = 'smtp.gmail.com';
+  vars.SMTP_PORT = '587';
+  vars.OTP_EMAIL_FROM = 'CampaignHub <campaignhubgh@gmail.com>';
+  console.log('Email: Gmail SMTP (campaignhubgh@gmail.com)');
+} else if (resendKey) {
+  console.log('Email: Resend API');
+} else {
+  console.log('Email: none — add Gmail app password as 3rd arg (recommended)');
+}
+
 console.log('Setting Vercel production env vars for campaignhub...\n');
 
 for (const [key, value] of Object.entries(vars)) {
@@ -50,7 +70,11 @@ for (const [key, value] of Object.entries(vars)) {
 }
 
 console.log('\nDone. Redeploy: npx vercel --prod');
-if (!resendKey) {
-  console.log('\n⚠ No RESEND_API_KEY — add one for emails to send:');
-  console.log('  node scripts/setup-otp-vercel.mjs <json> re_your_key');
+if (!resendKey && !gmailAppPassword) {
+  console.log('\n⚠ No email provider — 6-digit codes will not send until you add one:');
+  console.log('  Gmail (recommended): node scripts/setup-otp-vercel.mjs <json> your_16_char_app_password');
+  console.log('  Resend:              node scripts/setup-otp-vercel.mjs <json> re_your_key');
+  console.log('  (Create Gmail App Password: Google Account → Security → 2-Step → App passwords)');
+} else if (resendKey && !gmailAppPassword) {
+  console.log('\nTip: Prefer Gmail SMTP for campaignhubgh@gmail.com — invalid Resend keys are ignored automatically.');
 }

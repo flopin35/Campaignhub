@@ -29,6 +29,7 @@ const vars = {
 
 if (appPassword) {
   vars.SMTP_PASS = appPassword;
+  vars.GMAIL_APP_PASSWORD = appPassword;
 }
 
 console.log(`Setting Gmail SMTP on Vercel (${SMTP_USER})...\n`);

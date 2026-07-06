@@ -6,11 +6,13 @@ import {
   emailDocId,
   sendOtpEmail,
   randomUUID,
+  getOtpSecret,
 } from '../_lib/otpHelpers.js';
-
-const OTP_EXPIRY_MS = 5 * 60 * 1000;
-const RESEND_COOLDOWN_MS = 60 * 1000;
-const MAX_SENDS_PER_HOUR = 5;
+import {
+  OTP_EXPIRY_MS,
+  RESEND_COOLDOWN_MS,
+  MAX_SENDS_PER_HOUR,
+} from '../_lib/otpConfig.js';
 
 function json(res, status, body) {
   res.status(status).json(body);
@@ -40,8 +42,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const secret =
-      process.env.OTP_SECRET || process.env.JWT_SECRET || 'campaignhub-otp-secret-change-me';
+    const secret = getOtpSecret();
     const docId = emailDocId(email);
     const ref = admin.db.collection('auth_otp').doc(docId);
     const snap = await ref.get();
@@ -90,13 +91,14 @@ export default async function handler(req, res) {
       sendCount,
     });
 
-    await sendOtpEmail(email, code);
+    const delivery = await sendOtpEmail(email, code);
 
     return json(res, 200, {
       success: true,
-      message: 'Verification code sent. Check your inbox.',
+      message: 'Verification code sent. Check your inbox and spam folder.',
       expiresIn: OTP_EXPIRY_MS / 1000,
       cooldownSeconds: RESEND_COOLDOWN_MS / 1000,
+      delivery,
     });
   } catch (err) {
     console.error('[OTP] send error:', err.message);

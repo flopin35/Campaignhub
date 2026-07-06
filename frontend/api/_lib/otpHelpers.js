@@ -1,4 +1,10 @@
 import { createHash, randomInt, randomUUID } from 'crypto';
+import {
+  getOtpSecret,
+  getSmtpCredentials,
+  getResendApiKey,
+  DEFAULT_SMTP_USER,
+} from './otpConfig.js';
 
 let adminCache = null;
 
@@ -70,80 +76,176 @@ export function emailDocId(email) {
   return createHash('sha256').update(normalizeEmail(email)).digest('hex');
 }
 
-function buildOtpEmailHtml(code) {
-  return `
-    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#0f0f12;color:#f4f4f5;border-radius:16px;">
-      <div style="width:48px;height:48px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:white;margin-bottom:20px;">CH</div>
-      <h2 style="margin:0 0 8px;font-size:20px;">Your CampaignHub login code</h2>
-      <p style="color:#a1a1aa;font-size:14px;margin:0 0 24px;">Enter this code to sign in. Expires in 5 minutes.</p>
-      <p style="font-size:36px;font-weight:700;letter-spacing:10px;color:#fff;margin:0 0 24px;text-align:center;">${code}</p>
-      <p style="color:#71717a;font-size:12px;margin:0;">Never share this code. Protected by Firebase Security.</p>
-    </div>
-  `;
+const OTP_EMAIL_SUBJECT = 'Your CampaignHub verification code';
+
+function buildOtpEmailContent(code) {
+  const year = new Date().getFullYear();
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 32px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                <td style="vertical-align:middle;">
+                  <div style="display:inline-block;width:40px;height:40px;background:rgba(255,255,255,0.2);border-radius:10px;text-align:center;line-height:40px;font-weight:700;color:#fff;font-size:16px;">CH</div>
+                </td>
+                <td style="padding-left:14px;vertical-align:middle;">
+                  <p style="margin:0;font-size:18px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;">CampaignHub</p>
+                  <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.85);">Ghana's campaign platform</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 32px 28px;">
+            <h1 style="margin:0 0 12px;font-size:22px;font-weight:600;color:#18181b;letter-spacing:-0.02em;">Your verification code</h1>
+            <p style="margin:0 0 28px;font-size:15px;line-height:1.6;color:#52525b;">
+              Use the code below to sign in to your CampaignHub account. For your security, this code expires in <strong>5 minutes</strong>.
+            </p>
+            <div style="background:#f4f4f5;border:1px solid #e4e4e7;border-radius:12px;padding:24px;text-align:center;margin-bottom:28px;">
+              <p style="margin:0 0 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:#71717a;">Verification code</p>
+              <p style="margin:0;font-size:40px;font-weight:700;letter-spacing:12px;color:#4f46e5;font-family:'Courier New',Courier,monospace;">${code}</p>
+            </div>
+            <p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:#71717a;">
+              If you didn't request this code, you can safely ignore this email. Someone may have entered your email address by mistake.
+            </p>
+            <p style="margin:0;font-size:13px;line-height:1.6;color:#71717a;">
+              Need help? Contact us at <a href="mailto:campaignhubgh@gmail.com" style="color:#4f46e5;text-decoration:none;">campaignhubgh@gmail.com</a>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px;background:#fafafa;border-top:1px solid #e4e4e7;">
+            <p style="margin:0;font-size:11px;line-height:1.5;color:#a1a1aa;text-align:center;">
+              © ${year} CampaignHub · <a href="https://www.campaignhubgh.com" style="color:#71717a;text-decoration:none;">campaignhubgh.com</a><br>
+              Never share this code with anyone — CampaignHub staff will never ask for it.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim();
+
+  const text = [
+    'CampaignHub — Your verification code',
+    '',
+    `Your code: ${code}`,
+    '',
+    'This code expires in 5 minutes.',
+    '',
+    "If you didn't request this, ignore this email.",
+    'Support: campaignhubgh@gmail.com',
+    'https://www.campaignhubgh.com',
+  ].join('\n');
+
+  return { html, text, subject: OTP_EMAIL_SUBJECT };
 }
 
 async function sendViaResend(to, code) {
-  const resendKey = process.env.RESEND_API_KEY;
+  const resendKey = getResendApiKey();
   if (!resendKey) return false;
 
   const from =
     process.env.OTP_EMAIL_FROM || 'CampaignHub <onboarding@resend.dev>';
+  const { html, text, subject } = buildOtpEmailContent(code);
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      subject: `${code} is your CampaignHub login code`,
-      html: buildOtpEmailHtml(code),
-    }),
-  });
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        html,
+        text,
+      }),
+    });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend failed: ${err}`);
+    if (!res.ok) {
+      const err = await res.text();
+      console.error('[OTP] Resend failed:', err);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[OTP] Resend error:', err.message);
+    return false;
   }
-  return true;
 }
 
 async function sendViaSmtp(to, code) {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return false;
+  const creds = getSmtpCredentials();
+  if (!creds) return false;
 
   const nodemailer = await import('nodemailer');
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: Number(process.env.SMTP_PORT || 587),
     secure: process.env.SMTP_SECURE === 'true',
-    auth: { user, pass },
+    auth: { user: creds.user, pass: creds.pass },
   });
 
-  await transporter.sendMail({
-    from: process.env.OTP_EMAIL_FROM || `CampaignHub <${user}>`,
-    to,
-    subject: `${code} is your CampaignHub login code`,
-    html: buildOtpEmailHtml(code),
-  });
-  return true;
+  const { html, text, subject } = buildOtpEmailContent(code);
+
+  try {
+    await transporter.sendMail({
+      from: process.env.OTP_EMAIL_FROM || `CampaignHub <${creds.user || DEFAULT_SMTP_USER}>`,
+      to,
+      subject,
+      html,
+      text,
+    });
+    return true;
+  } catch (err) {
+    console.error('[OTP] SMTP failed:', err.message);
+    throw new Error(
+      `Could not send email via Gmail (${creds.user}). Check SMTP_PASS or GMAIL_APP_PASSWORD on the server.`
+    );
+  }
+}
+
+function isLocalDevOtpLog() {
+  // Never pretend emails were sent on Vercel — only log codes during local dev.
+  return process.env.OTP_DEV_LOG === 'true' && !process.env.VERCEL;
 }
 
 export async function sendOtpEmail(to, code) {
-  if (await sendViaResend(to, code)) return;
-  if (await sendViaSmtp(to, code)) return;
+  const errors = [];
 
-  if (process.env.OTP_DEV_LOG === 'true' || process.env.VERCEL_ENV === 'development') {
-    console.info('[OTP] Dev code for', to, ':', code);
-    return;
+  try {
+    if (await sendViaSmtp(to, code)) return 'smtp';
+  } catch (err) {
+    errors.push(err.message);
   }
 
+  if (await sendViaResend(to, code)) return 'resend';
+
+  if (isLocalDevOtpLog()) {
+    console.info('[OTP] Dev code for', to, ':', code);
+    return 'dev';
+  }
+
+  const hint = getSmtpCredentials()
+    ? errors[0]
+    : 'Add Gmail SMTP (SMTP_PASS or GMAIL_APP_PASSWORD) or a valid RESEND_API_KEY on Vercel.';
+
   throw new Error(
-    'Email not configured. Add RESEND_API_KEY or Gmail SMTP (SMTP_USER + SMTP_PASS) on the server. For Gmail use an App Password, not your normal password.'
+    errors[0] ||
+      `Email delivery is not configured on the server. ${hint} You can also use Password or Google sign-in.`
   );
 }
 
-export { randomUUID };
+export { randomUUID, getOtpSecret };

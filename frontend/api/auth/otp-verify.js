@@ -3,6 +3,7 @@ import {
   hashOtp,
   normalizeEmail,
   emailDocId,
+  getOtpSecret,
 } from '../_lib/otpHelpers.js';
 
 function json(res, status, body) {
@@ -36,7 +37,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const secret = process.env.OTP_SECRET || process.env.JWT_SECRET || 'campaignhub-otp-secret';
+    const secret = getOtpSecret();
     const ref = admin.db.collection('auth_otp').doc(emailDocId(email));
     const snap = await ref.get();
 

@@ -11,11 +11,11 @@ export const BRAND_COPY = {
   heroHeadline: 'Your campaign’s',
   heroHeadlineAccent: 'official home online.',
   heroSubtext:
-    'Launch an official campaign page in minutes — share your message, party, and links with a single URL and QR code built for Ghana.',
+    'One trusted page for your candidate, party, and message — with an official URL and QR code built for Ghana.',
   launchCta: 'Launch Campaign Page',
-  exploreCta: 'Discover Campaigns',
+  exploreCta: 'Browse campaign pages',
   uploadTitle: 'Launch Campaign Page',
-  uploadSubtitle: 'Free for 14 days · live instantly · built for political campaigns',
+  uploadSubtitle: 'Free hosting to start · built for political campaigns in Ghana',
   successTitle: 'Campaign Page Live!',
   successSubtext: 'Share your official link and QR code on posters, WhatsApp, and radio mentions.',
 };

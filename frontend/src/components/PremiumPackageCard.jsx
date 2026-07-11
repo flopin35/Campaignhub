@@ -19,7 +19,7 @@ export default function PremiumPackageCard({
 }) {
   const priceDisplay = plan.priceLabel
     || (plan.priceFrom ? `From ₵${plan.priceFrom}` : plan.price === 0 ? '₵0' : `₵${plan.price}`);
-  const isPopular = plan.badge === 'Most Popular' || plan.badge === 'All-in-one';
+  const isPopular = plan.badge === 'Official presence' || plan.badge === 'Most Popular' || plan.badge === 'All-in-one';
   const savings = getBundleSavings(plan);
   const clickable = !!(to || onSelect || onAction || onCardClick);
 

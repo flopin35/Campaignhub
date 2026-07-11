@@ -11,7 +11,7 @@ const tabs = [
 export default function Sidebar({ activeTab, onTabChange }) {
   return (
     <aside className="w-64 bg-surface-card border-r border-surface-border min-h-[calc(100vh-4rem)] p-4 hidden lg:block shrink-0">
-      <p className="text-xs text-gray-500 uppercase tracking-wide mb-4 px-3">Control Center</p>
+      <p className="text-xs text-gray-500 uppercase tracking-wide mb-4 px-3">Authorization</p>
       <nav className="space-y-1">
         {tabs.map((tab) => (
           <button
@@ -30,9 +30,9 @@ export default function Sidebar({ activeTab, onTabChange }) {
       </nav>
 
       <div className="mt-8 p-4 bg-surface-elevated rounded-xl">
-        <p className="text-xs text-gray-500 mb-1">Admin Operations</p>
+        <p className="text-xs text-gray-500 mb-1">CampaignHub Admin</p>
         <p className="text-xs text-gray-400">
-          Approve payments, authorize pages, moderate content, and manage hosting extensions.
+          Confirm payments, authorize pages, and moderate content.
         </p>
       </div>
     </aside>

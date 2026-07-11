@@ -197,7 +197,7 @@ export default function Dashboard() {
             { label: 'Pages', value: myCampaigns.length },
             { label: 'Live', value: active.length, accent: 'text-emerald-400' },
             { label: 'Page views', value: totalViews.toLocaleString(), accent: 'text-brand-400' },
-            { label: 'Followers', value: totalSupporters.toLocaleString(), accent: 'text-amber-400' },
+            { label: 'Supporters', value: totalSupporters.toLocaleString(), accent: 'text-amber-400' },
           ].map((s) => (
             <div key={s.label} className="bg-surface-elevated/50 rounded-xl border border-surface-border px-3 sm:px-4 py-2.5 sm:py-3">
               <div className={`text-lg sm:text-xl font-bold ${s.accent || 'text-white'}`}>{s.value}</div>
@@ -268,7 +268,7 @@ export default function Dashboard() {
                       </span>
                     </div>
                     <p className="text-[10px] text-gray-500 mt-1.5">
-                      {(c.views || 0).toLocaleString()} page views · {(c.followerCount || 0)} followers
+                      {(c.views || 0).toLocaleString()} page views · {(c.followerCount || 0)} supporters
                     </p>
                   </button>
                 );

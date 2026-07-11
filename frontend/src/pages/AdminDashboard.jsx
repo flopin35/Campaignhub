@@ -570,7 +570,7 @@ export default function AdminDashboard() {
 
         <div className="mb-6">
 
-          <h1 className="text-2xl font-bold text-white">Admin Control Center</h1>
+          <h1 className="text-2xl font-bold text-white">CampaignHub Admin</h1>
 
           <p className="text-sm text-gray-500">{userProfile?.email}</p>
 
@@ -596,7 +596,7 @@ export default function AdminDashboard() {
 
                   <div className="text-2xl font-bold text-emerald-400">{revenue.totalRevenue.toLocaleString()} GHS</div>
 
-                  <div className="text-xs text-gray-500 mt-1">Confirmed revenue</div>
+                  <div className="text-xs text-gray-500 mt-1">Confirmed platform payments</div>
 
                 </div>
 

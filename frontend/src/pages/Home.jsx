@@ -17,24 +17,25 @@ export default function Home() {
   const { campaigns: liveCampaigns, loading } = useCampaigns({ status: 'active', sort: 'newest' });
 
   const featuredCampaign = useMemo(
-    () => liveCampaigns.find((c) => c.featured) || liveCampaigns.find((c) => c.verified) || liveCampaigns[0] || null,
+    () => liveCampaigns.find((c) => c.verified && c.featured) || liveCampaigns.find((c) => c.verified) || null,
     [liveCampaigns]
   );
 
   return (
     <div className="pb-4">
       <HeroSection campaignCount={liveCampaigns.length} />
+      <FeatureSection />
+      <HowItWorks />
+      <TrustSection />
+      <PremiumFeaturesSection />
 
       {!loading && featuredCampaign && (
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 mb-4">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+          <h2 className="section-title mb-2">Official pages in the directory</h2>
+          <p className="section-subtitle mb-8">Admin-authorized campaign pages citizens can trust.</p>
           <FeaturedBanner campaign={featuredCampaign} />
         </section>
       )}
-
-      <FeatureSection />
-      <HowItWorks />
-      <PremiumFeaturesSection />
-      <TrustSection />
 
       <section className="py-20 sm:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -46,7 +47,7 @@ export default function Home() {
           >
             <div>
               <h2 className="section-title">Campaign Directory</h2>
-              <p className="section-subtitle">Discover official political campaign pages across Ghana.</p>
+              <p className="section-subtitle">Official political campaign pages across Ghana.</p>
             </div>
             <Link to="/campaigns" className="text-sm text-brand-400 hover:text-brand-300 font-medium shrink-0">
               Browse all →

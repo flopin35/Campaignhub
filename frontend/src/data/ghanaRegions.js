@@ -1,4 +1,4 @@
-/** Ghana regions and sample constituencies for supporter CRM & intelligence. */
+/** Ghana regions and constituencies for supporter sign-ups. */
 
 export const GHANA_REGIONS = [
   'Greater Accra',
@@ -50,40 +50,14 @@ export const CONSTITUENCIES_BY_REGION = {
 };
 
 export const SUPPORTER_INTERESTS = [
-  'Volunteering',
-  'Donations',
+  'Campaign updates',
   'Events & rallies',
-  'Voter mobilization',
-  'Social media',
-  'Field outreach',
+  'Donations',
   'Policy & ideas',
+  'Share online',
 ];
 
 export const DONATION_TIERS = [10, 25, 50, 100, 200, 500];
-
-export const CRM_PLANS = [
-  {
-    id: 'crm-basic',
-    name: 'Campaign Tools Basic',
-    price: 500,
-    priceLabel: '₵500 / month',
-    features: ['Supporter CRM', 'MoMo donations', 'Volunteer roster', 'WhatsApp broadcast links'],
-  },
-  {
-    id: 'crm-pro',
-    name: 'Campaign Tools Pro',
-    price: 2000,
-    priceLabel: '₵2,000 / month',
-    features: ['Everything in Basic', 'Constituency intelligence', 'Event QR check-in', 'Donation leaderboards', 'Targeted mobilization'],
-  },
-  {
-    id: 'crm-enterprise',
-    name: 'Enterprise',
-    price: 10000,
-    priceLabel: '₵10,000+ / month',
-    features: ['Multi-campaign CRM', 'Party-wide analytics', 'Dedicated support', 'Custom integrations'],
-  },
-];
 
 export function getConstituenciesForRegion(region) {
   return CONSTITUENCIES_BY_REGION[region] || [];

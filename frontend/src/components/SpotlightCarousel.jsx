@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatCountdown } from '../utils/helpers';
-import BoostBadge from './BoostBadge';
 import EmptyState from './EmptyState';
+import VerificationBadge from './VerificationBadge';
+import { useState, useEffect } from 'react';
 
 export default function SpotlightCarousel({ campaigns }) {
   const spotlight = campaigns.filter((c) => c.spotlight && c.status === 'active');
@@ -21,11 +20,11 @@ export default function SpotlightCarousel({ campaigns }) {
     return (
       <section className="py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold text-white mb-4">Elite Spotlight</h2>
+          <h2 className="text-2xl font-bold text-white mb-4">Directory placement</h2>
           <EmptyState
-            title="No spotlight campaigns"
-            description="Elite package campaigns with spotlight placement appear here."
-            actionLabel="View all campaigns"
+            title="No spotlight pages"
+            description="Campaign pages with directory spotlight placement appear here."
+            actionLabel="Browse campaign pages"
             actionTo="/campaigns"
           />
         </div>
@@ -39,7 +38,7 @@ export default function SpotlightCarousel({ campaigns }) {
     <section className="py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-white">Elite Spotlight</h2>
+          <h2 className="text-2xl font-bold text-white">Directory placement</h2>
           <div className="flex gap-1.5">
             {spotlight.map((_, i) => (
               <button
@@ -64,15 +63,14 @@ export default function SpotlightCarousel({ campaigns }) {
                 <img src={current.bannerImage} alt={current.title} className="w-full h-full object-cover min-h-[240px]" />
               </div>
               <div className="p-8 flex flex-col justify-center">
-                <span className="badge-active w-fit mb-3">Elite · Spotlight</span>
-                <BoostBadge campaign={current} className="mb-2" />
+                <VerificationBadge verified={current.verified} />
+                {current.campaignType && (
+                  <span className="text-xs text-gray-500 mb-3 block mt-2">{current.campaignType}</span>
+                )}
                 <h3 className="text-2xl font-bold text-white mb-2">{current.title}</h3>
                 <p className="text-gray-400 text-sm mb-4 line-clamp-3">{current.description}</p>
-                {current.remainingMs != null && (
-                  <p className="text-sm text-brand-400 mb-4">{formatCountdown(current.remainingMs)}</p>
-                )}
                 <Link to={`/campaign/${current.slug}`} className="btn-primary w-fit text-sm">
-                  View Campaign
+                  View Official Page
                 </Link>
               </div>
             </div>

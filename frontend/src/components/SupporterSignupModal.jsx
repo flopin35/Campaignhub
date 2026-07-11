@@ -9,7 +9,7 @@ import {
   getConstituenciesForRegion,
   SUPPORTER_INTERESTS,
 } from '../data/ghanaRegions';
-import { Users, Heart, HandHeart } from 'lucide-react';
+import { Users, HandHeart } from 'lucide-react';
 
 export default function SupporterSignupModal({ campaign, onClose, defaultVolunteer = false }) {
   const { user } = useAuth();
@@ -184,18 +184,6 @@ export default function SupporterSignupModal({ campaign, onClose, defaultVolunte
                 ))}
               </div>
             </div>
-            {!defaultVolunteer && (
-            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.isVolunteer}
-                onChange={(e) => setForm({ ...form, isVolunteer: e.target.checked })}
-                className="rounded border-surface-border"
-              />
-              <Heart className="w-3.5 h-3.5 text-emerald-400" />
-              I can also help with events or outreach
-            </label>
-            )}
             <div className="flex gap-3 pt-2">
               <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
               <button type="submit" disabled={loading} className="btn-primary flex-1 disabled:opacity-50">

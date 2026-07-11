@@ -23,8 +23,8 @@ const TABS = [
   { id: 'distribute', label: 'Share formats', short: 'Share', icon: Share2, premium: true, feature: 'distribute' },
   { id: 'analytics', label: 'Page stats', short: 'Stats', icon: BarChart3, premium: false },
   { id: 'events', label: 'Events', short: 'Events', icon: Calendar, premium: true, feature: 'crm' },
-  { id: 'supporters', label: 'Supporters', short: 'Fans', icon: Users, premium: true, feature: 'crm' },
-  { id: 'donations', label: 'Donations', short: 'MoMo', icon: Wallet, premium: true, feature: 'crm' },
+  { id: 'supporters', label: 'Supporters', short: 'Supporters', icon: Users, premium: true, feature: 'supporters' },
+  { id: 'donations', label: 'Donations', short: 'MoMo', icon: Wallet, premium: true, feature: 'supporters' },
 ];
 
 export default function CampaignWorkspace({
@@ -144,7 +144,7 @@ export default function CampaignWorkspace({
             onClick={() => openAdBoostModal({ campaign })}
             className="btn-primary text-xs py-2.5 px-3 inline-flex items-center justify-center gap-1.5 col-span-2 sm:col-span-1 border-amber-500/30 bg-amber-600/20 hover:bg-amber-600/30"
           >
-            <Zap className="w-3.5 h-3.5 text-amber-400" /> Boost visibility
+            <Zap className="w-3.5 h-3.5 text-amber-400" /> Spotlight this page
           </button>
           <Link to={`/campaign/${campaign.slug}`} className="btn-secondary text-xs py-2.5 px-3 inline-flex items-center justify-center gap-1.5">
             <ExternalLink className="w-3.5 h-3.5" /> View official page
@@ -176,10 +176,10 @@ export default function CampaignWorkspace({
         <div className="p-3 rounded-xl bg-brand-600/10 border border-brand-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Lock className="w-4 h-4 text-brand-400 shrink-0" />
-            <p className="text-xs text-gray-400">Free plan: overview &amp; basic stats. Upgrade for sharing formats, page analytics &amp; supporter tools.</p>
+            <p className="text-xs text-gray-400">Free plan: official page, link &amp; QR. Upgrade for authorization review path, sharing formats &amp; page activity.</p>
           </div>
           <button type="button" onClick={() => openPremiumModal({ campaign, planId: 'premium-subscription' })} className="btn-primary text-xs py-2.5 px-4 w-full sm:w-auto shrink-0">
-            Upgrade ₵500/mo
+            Go official — ₵500/mo
           </button>
         </div>
       ) : null}
@@ -268,7 +268,7 @@ export default function CampaignWorkspace({
                   ]} />
                 </Panel>
                 <div className="sm:col-span-1">
-                  <PremiumGate campaign={campaign} feature="crm" compact />
+                  <PremiumGate campaign={campaign} feature="supporters" compact />
                 </div>
                 <div className="sm:col-span-2">
                   <PremiumGate campaign={campaign} feature="distribute" compact />
@@ -303,12 +303,12 @@ export default function CampaignWorkspace({
         {tab === 'supporters' && (
           canAccessCrm(campaign) ? (
             <DataTable
-              headers={['Name', 'Phone', 'Region', 'Constituency', 'Volunteer']}
-              rows={supporters.map((s) => [s.name, s.phone, s.region || '—', s.constituency || '—', s.isVolunteer ? 'Yes' : '—'])}
+              headers={['Name', 'Phone', 'Region', 'Constituency']}
+              rows={supporters.map((s) => [s.name, s.phone, s.region || '—', s.constituency || '—'])}
               empty="No supporters yet"
             />
           ) : (
-            <PremiumGate campaign={campaign} feature="crm" title={`${supporters.length} supporters waiting`} description="Upgrade to view supporter sign-ups, filter by region, and send updates." />
+            <PremiumGate campaign={campaign} feature="supporters" title={`${supporters.length} supporters waiting`} description="Upgrade to view supporter sign-ups and filter by region." />
           )
         )}
 
@@ -335,26 +335,17 @@ export default function CampaignWorkspace({
             />
           </div>
           ) : (
-            <PremiumGate campaign={campaign} feature="crm" title={`₵${donationStats.totalRaised} raised`} description="Upgrade to verify MoMo donations, see donor details, and manage your leaderboard." />
+            <PremiumGate campaign={campaign} feature="supporters" title={`₵${donationStats.totalRaised} raised`} description="Upgrade to confirm MoMo donations and see donor details." />
           )
         )}
 
-        {tab === 'volunteers' && (
-          canAccessCrm(campaign) ? (
-          <DataTable
-            headers={['Name', 'Phone', 'Region', 'Status', 'Actions']}
-            rows={volunteers.map((v) => [
-              v.name,
-              v.phone,
-              v.region || '—',
-              v.status,
-              <VolunteerActions key={v.id} volunteer={v} onStatus={handleVolunteerStatus} />,
-            ])}
-            empty="No volunteers yet"
-          />
-          ) : (
-            <PremiumGate campaign={campaign} feature="crm" title={`${volunteerStats.active} active volunteers`} description="Upgrade to review and manage volunteer sign-ups." />
-          )
+        {(tab === 'volunteers' || tab === 'broadcast') && (
+          <div className="py-10 text-center text-sm text-gray-500 glass-card">
+            This section is not part of the official campaign page workspace.
+            <button type="button" className="block mx-auto mt-3 text-brand-400" onClick={() => setActiveTab('overview')}>
+              Back to overview
+            </button>
+          </div>
         )}
 
         {tab === 'events' && (
@@ -384,33 +375,7 @@ export default function CampaignWorkspace({
               {events.length === 0 && <Empty text="No events scheduled" />}
             </div>
           ) : (
-            <PremiumGate campaign={campaign} feature="crm" title={`${events.length} events`} description="Upgrade to schedule events and share event links on your official page." />
-          )
-        )}
-
-        {tab === 'broadcast' && (
-          canAccessCrm(campaign) ? (
-            <div className="glass-card p-4 space-y-4">
-              <div className="grid sm:grid-cols-2 gap-3">
-                <select className="input-field text-sm" value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)}>
-                  <option value="">All supporters ({supporters.length})</option>
-                  {GHANA_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-                <p className="text-sm text-gray-400 flex items-center">{filtered.length} targeted</p>
-              </div>
-              <textarea className="input-field text-sm resize-none" rows={3} placeholder="Campaign update message…" value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
-              <div className="flex flex-col sm:flex-row gap-2">
-                <a href={wa.waLink} target="_blank" rel="noopener noreferrer" className="btn-primary text-xs py-2.5 flex-1 text-center">WhatsApp</a>
-                <a href={buildSmsBroadcast({ campaign, message: broadcastMsg }).smsLink} className="btn-secondary text-xs py-2.5 flex-1 text-center">SMS</a>
-                {emails.length > 0 && (
-                  <a href={buildEmailBroadcast({ campaign, message: broadcastMsg, emails }).mailtoLink} className="btn-secondary text-xs py-2.5 flex-1 text-center">
-                    Email ({emails.length})
-                  </a>
-                )}
-              </div>
-            </div>
-          ) : (
-            <PremiumGate campaign={campaign} feature="crm" title={`Reach ${supporters.length} supporters`} description="Upgrade to send WhatsApp, SMS, and email updates to your supporter list." />
+            <PremiumGate campaign={campaign} feature="supporters" title={`${events.length} events`} description="Upgrade to schedule events and share event details on your official page." />
           )
         )}
       </div>
@@ -505,18 +470,6 @@ function DataTable({ headers, rows, empty }) {
   );
 }
 
-function VolunteerActions({ volunteer, onStatus }) {
-  const btn = 'text-xs py-2 px-2 min-h-[36px] touch-manipulation';
-  if (volunteer.status === 'pending') {
-    return (
-      <span className="flex flex-wrap gap-2 justify-end">
-        <button type="button" onClick={() => onStatus(volunteer.id, 'approved')} className={`${btn} text-emerald-400`}>Approve</button>
-        <button type="button" onClick={() => onStatus(volunteer.id, 'inactive')} className={`${btn} text-red-400`}>Reject</button>
-      </span>
-    );
-  }
-  if (volunteer.status === 'approved') {
-    return <button type="button" onClick={() => onStatus(volunteer.id, 'active')} className={`${btn} text-brand-400`}>Activate</button>;
-  }
-  return '—';
+function VolunteerActions() {
+  return null;
 }

@@ -6,18 +6,18 @@ import { Link } from 'react-router-dom';
 const TRUST_POINTS = [
   {
     icon: Shield,
-    title: 'Official verification',
-    description: 'Admin-verified pages display a badge so voters know the page is authorized — not a fake.',
+    title: 'Official Page badge',
+    description: 'Only admin-authorized pages show Official Page — so citizens know the campaign is real.',
   },
   {
     icon: BadgeCheck,
-    title: 'Transparent status',
-    description: 'Clear active, authorized, and archived states — no hidden or misleading campaign pages.',
+    title: 'Clear page status',
+    description: 'Active and archived pages are labelled plainly — no hidden or misleading campaign homes.',
   },
   {
     icon: FileArchive,
-    title: 'Campaign archive',
-    description: 'Past campaigns are preserved for public record — not silently deleted.',
+    title: 'Public record',
+    description: 'Past campaign pages can remain available for the public record — not silently erased.',
   },
   {
     icon: Mail,
@@ -36,9 +36,9 @@ export default function TrustSection() {
           viewport={{ once: true }}
           className="text-center mb-14"
         >
-          <h2 className="section-title">Trust is the product</h2>
+          <h2 className="section-title">Why citizens can trust these pages</h2>
           <p className="section-subtitle mx-auto">
-            In Ghanaian politics, the wrong link spreads faster than the right one. CampaignHub exists so citizens can find the truth.
+            In Ghanaian politics, the wrong link spreads fast. CampaignHub helps voters find the official campaign home.
           </p>
         </motion.div>
 

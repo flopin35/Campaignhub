@@ -164,8 +164,11 @@ export const CAMPAIGN_TYPES = OFFICE_LEVELS;
 /** Primary category for new political uploads */
 export const POLITICS_CATEGORY = 'Politics';
 
-/** Directory filters — Politics-first; legacy values kept for older Firestore documents */
-export const CATEGORIES = [
+/** Public directory is office-first. Legacy category values kept for older Firestore documents / upload mapping. */
+export const CATEGORIES = [POLITICS_CATEGORY];
+
+/** @deprecated — do not show in public directory filters */
+export const LEGACY_CATEGORIES = [
   'Politics',
   'NGO',
   'Events',

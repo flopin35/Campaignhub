@@ -116,24 +116,22 @@ export default function CampaignDetails() {
         {isOwner && <ExtendCampaignBanner campaign={campaign} onExtend={() => setShowExtend(true)} />}
 
         <div className="flex flex-wrap items-center gap-3 mb-4">
-          <span className={getStatusBadgeClass(campaign.status)}>{getStatusLabel(campaign.status)}</span>
+          {isOwner && (
+            <span className={getStatusBadgeClass(campaign.status)}>{getStatusLabel(campaign.status)}</span>
+          )}
           <VerificationBadge verified={campaign.verified} />
-          {campaign.verificationRequested && !campaign.verified && (
+          {isOwner && campaign.verificationRequested && !campaign.verified && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
               Authorization pending
             </span>
           )}
-          {campaign.paymentVerified && (
+          {isOwner && campaign.paymentVerified && (
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
               Payment confirmed
             </span>
           )}
-          {campaign.campaignType && <span className="badge-pending">{campaign.campaignType}</span>}
-          {campaign.packageName && <span className="text-xs text-gray-500">{campaign.packageName}</span>}
-          {campaign.featured && <span className="badge-active">Featured in directory</span>}
-          {campaign.spotlight && <span className="badge-pending">Spotlight</span>}
-          <CampaignCountdown remainingMs={campaign.remainingMs} endDate={campaign.endDate} />
-          <span className="text-sm text-gray-500">{campaign.views || 0} views</span>
+          {campaign.campaignType && <span className="text-xs text-gray-500">{campaign.campaignType}</span>}
+          {isOwner && <CampaignCountdown remainingMs={campaign.remainingMs} endDate={campaign.endDate} />}
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">{campaign.title}</h1>

@@ -1,36 +1,30 @@
 import { motion } from 'framer-motion';
-import { Shield, Search, FileText, Calendar, Link2 } from 'lucide-react';
+import { Shield, Search, Calendar, Link2 } from 'lucide-react';
 
 const REASONS = [
   {
     icon: Shield,
     title: 'Public trust',
     description:
-      'Voters and media need to know your page is authorized. Admin verification shows your campaign page is official — not an impersonator.',
+      'Voters and media need to know your page is authorized. Admin review is how your campaign earns the Official Page badge.',
   },
   {
     icon: Search,
-    title: 'Campaign discovery',
+    title: 'Found by citizens',
     description:
-      'A page no one can find helps no one. Premium keeps you visible in the public campaign directory when citizens are looking.',
-  },
-  {
-    icon: FileText,
-    title: 'Clear campaign message',
-    description:
-      'AI support helps you write slogans, captions, and updates that sound like you — ready for posters, WhatsApp, and radio mentions.',
+      'Help people find your official page in the public campaign directory when they are looking for real campaigns.',
   },
   {
     icon: Calendar,
     title: 'Election-period hosting',
     description:
-      'Campaigns run longer than 14 days. Extended hosting keeps your official page live through the full election period.',
+      'Campaigns run longer than a free window. Extended hosting keeps your official page live through the election period.',
   },
   {
     icon: Link2,
     title: 'One official link',
     description:
-      'Share a single official campaign URL and QR code everywhere. One trusted source for your biography, party, events, and updates.',
+      'Share a single official campaign URL and QR code everywhere — one trusted source for your message and party.',
   },
 ];
 
@@ -38,13 +32,13 @@ export default function WhyUpgradeSection() {
   return (
     <section className="page-section">
       <div className="text-center mb-10 sm:mb-12">
-        <h2 className="section-title">Why campaigns upgrade</h2>
+        <h2 className="section-title">Why campaigns go official</h2>
         <p className="section-subtitle mx-auto">
-          Premium is about official presence — verification, visibility, and a page voters can trust and find.
+          Verification & hosting are about presence — authorization, visibility, and a page voters can trust.
         </p>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {REASONS.map((item, i) => (
           <motion.div
             key={item.title}

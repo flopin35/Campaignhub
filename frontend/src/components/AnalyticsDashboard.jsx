@@ -44,7 +44,7 @@ function AdvancedInsights({ campaign, stats, views, shares, engagementRate }) {
       <div className="grid sm:grid-cols-3 gap-4">
         <div className="bg-surface-elevated rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-white">{clickThrough}%</p>
-          <p className="text-xs text-gray-500 mt-1">Click-through rate</p>
+          <p className="text-xs text-gray-500 mt-1">Link &amp; QR response</p>
         </div>
         <div className="bg-surface-elevated rounded-xl p-4 text-center">
           <p className="text-2xl font-bold text-brand-400">{engagementRate}%</p>
@@ -99,7 +99,7 @@ export default function AnalyticsDashboard({ campaign, stats: externalStats }) {
   const engagement = [
     { label: 'Views', value: views },
     { label: 'Supporter sign-ups', value: leads },
-    { label: 'CTA clicks', value: ctaClicks },
+    { label: 'Page actions', value: ctaClicks },
     { label: 'Share clicks', value: outboundShares },
     { label: 'Supporters', value: campaign?.followerCount ?? 0 },
   ];

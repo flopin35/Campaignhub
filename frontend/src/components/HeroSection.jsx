@@ -12,11 +12,12 @@ export default function HeroSection({ campaignCount = 0 }) {
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl">
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-            {campaignCount > 0 && (
-              <span className="inline-block px-3 py-1 mb-6 text-xs font-medium text-brand-300 bg-brand-600/10 border border-brand-500/20 rounded-full">
-                {campaignCount} live campaign page{campaignCount !== 1 ? 's' : ''} in {BRAND.country}
-              </span>
-            )}
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-400 mb-4">
+              {BRAND.name}
+            </p>
+            <p className="text-base sm:text-lg text-gray-300 mb-6 max-w-xl leading-relaxed">
+              {BRAND.tagline}
+            </p>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-[1.08] tracking-tight mb-6">
               {BRAND_COPY.heroHeadline}
@@ -38,12 +39,11 @@ export default function HeroSection({ campaignCount = 0 }) {
               </Link>
             </div>
 
-            <div className="flex flex-wrap gap-4 mt-10 text-xs text-gray-500">
-              <span>✓ Official campaign URL</span>
-              <span>✓ QR for posters</span>
-              <span>✓ WhatsApp sharing</span>
-              <span>✓ Admin verification available</span>
-            </div>
+            {campaignCount > 0 && (
+              <p className="mt-10 text-xs text-gray-500">
+                {campaignCount} live campaign page{campaignCount !== 1 ? 's' : ''} in {BRAND.country}
+              </p>
+            )}
           </motion.div>
         </div>
       </div>

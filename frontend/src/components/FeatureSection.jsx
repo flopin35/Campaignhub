@@ -14,13 +14,13 @@ const features = [
   },
   {
     icon: Shield,
-    title: 'Admin verification',
-    description: 'Optional admin verification helps citizens distinguish official campaign pages from impersonators.',
+    title: 'Admin authorization',
+    description: 'Admin-authorized pages show an Official Page badge so citizens can tell real campaigns from fakes.',
   },
   {
     icon: Smartphone,
     title: 'WhatsApp-ready',
-    description: 'Share in one tap. Built for how Ghana campaigns actually reach people — mobile-first.',
+    description: 'Share in one tap. Built for how Ghana campaigns reach people — mobile-first.',
   },
 ];
 
@@ -34,9 +34,9 @@ export default function FeatureSection() {
           viewport={{ once: true }}
           className="mb-14"
         >
-          <h2 className="section-title">Everything a campaign page needs</h2>
+          <h2 className="section-title">A clear public home for your campaign</h2>
           <p className="section-subtitle">
-            Not an operating system. Not a marketplace. A clear, trusted public home for your political campaign.
+            One official page for your candidate, party, message, and links — simple enough for every voter to find.
           </p>
         </motion.div>
 

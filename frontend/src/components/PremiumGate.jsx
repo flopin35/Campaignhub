@@ -8,21 +8,25 @@ const MESSAGES = {
     title: 'Multi-platform sharing is Premium',
     description: 'Generate WhatsApp, Instagram, TikTok & Facebook posts with your official campaign link — one message, every platform.',
   },
+  supporters: {
+    title: 'Supporter tools are Premium',
+    description: 'Collect update sign-ups, confirm MoMo support, and list events on your official campaign page.',
+  },
   crm: {
     title: 'Supporter tools are Premium',
-    description: 'Manage supporter sign-ups, MoMo donations, events & campaign updates from your campaign page.',
+    description: 'Collect update sign-ups, confirm MoMo support, and list events on your official campaign page.',
   },
   analytics: {
-    title: 'Page analytics is Premium',
-    description: 'See traffic sources, sign-ups, link copies, and page activity — know how citizens find your official page.',
+    title: 'Detailed page activity is Premium',
+    description: 'See how citizens find your official page — traffic sources, sign-ups, and link activity.',
   },
   ai: {
-    title: 'AI Campaign Assistant is Premium',
-    description: 'Full AI captions, tone variants (Gen Z, formal, slang), hashtags, CTAs, and message coaching.',
+    title: 'AI message support is Premium',
+    description: 'Captions, tone variants, hashtags, and message coaching for your campaign communications.',
   },
   default: {
     title: 'Upgrade to CampaignHub Premium',
-    description: 'Unlock AI message support, sharing formats, page analytics, and supporter tools for ₵500/month.',
+    description: 'Official presence — authorization review path, hosting, and directory visibility for ₵500/month.',
   },
 };
 

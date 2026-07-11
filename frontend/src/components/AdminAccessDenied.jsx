@@ -14,7 +14,7 @@ export default function AdminAccessDenied() {
         </div>
         <h1 className="text-xl font-bold text-white mb-2">Admin Access Restricted</h1>
         <p className="text-gray-400 text-sm mb-4">
-          The admin dashboard is only available to:
+          The admin area is only available to:
         </p>
         <p className="text-brand-400 font-medium mb-6">{ADMIN_EMAIL}</p>
         <p className="text-gray-500 text-sm mb-6">

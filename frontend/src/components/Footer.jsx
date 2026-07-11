@@ -21,7 +21,7 @@ export default function Footer() {
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold text-gray-300 mb-4">Platform</h4>
+            <h4 className="text-sm font-semibold text-gray-300 mb-4">Explore</h4>
             <div className="space-y-2.5">
               <Link to="/campaigns" className="block text-sm text-gray-500 hover:text-brand-400 transition-colors">
                 Campaign Directory
@@ -61,7 +61,7 @@ export default function Footer() {
                 Sign In
               </Link>
               <Link to="/signup" className="block text-sm text-gray-500 hover:text-brand-400 transition-colors">
-                Create Account
+                Create account
               </Link>
             </div>
           </div>
@@ -69,7 +69,7 @@ export default function Footer() {
 
         <div className="mt-10 pt-8 border-t border-surface-border flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-600">
           <p>© {new Date().getFullYear()} {BRAND.name} {BRAND.country}. All rights reserved.</p>
-          <p>Free to start · Official pages · Admin-verified campaign pages</p>
+          <p>Official campaign pages · Admin authorization available</p>
         </div>
       </div>
     </footer>

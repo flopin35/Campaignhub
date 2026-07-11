@@ -8,13 +8,13 @@ const steps = [
     icon: Upload,
     step: '1',
     title: 'Create your page',
-    description: 'Add your candidate photo, party logo, message, and official links. Political templates help you launch in minutes.',
+    description: 'Add your candidate photo, party logo, campaign message, and official links.',
   },
   {
     icon: ShieldCheck,
     step: '2',
-    title: 'Request verification (optional)',
-    description: 'Apply for admin verification so voters know your page is authorized — not an impersonation.',
+    title: 'Request authorization',
+    description: 'Ask admin to authorize your page so voters know it is official — not an impersonation.',
   },
   {
     icon: Share2,
@@ -35,7 +35,9 @@ export default function HowItWorks() {
           className="text-center mb-14"
         >
           <h2 className="section-title">Three steps to your official page</h2>
-          <p className="section-subtitle mx-auto">No complicated tools. Just a trusted public presence for your campaign.</p>
+          <p className="section-subtitle mx-auto">
+            From candidate details to a trusted public page citizens can find and share.
+          </p>
         </motion.div>
 
         <div className="grid md:grid-cols-3 gap-8 lg:gap-12">

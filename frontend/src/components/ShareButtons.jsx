@@ -62,7 +62,7 @@ export default function ShareButtons({ campaign, compact = false }) {
 
   return (
     <div className="space-y-3">
-      {/* WhatsApp-first — Ghana sales engine */}
+      {/* WhatsApp-first — Ghana campaign sharing */}
       <button
         type="button"
         onClick={shareNative}

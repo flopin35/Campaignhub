@@ -14,15 +14,24 @@ import {
 import { db } from '../firebase/auth';
 
 /** Create notification with optional type and campaign link */
-export async function createNotification({ userId, message, type = 'general', campaignId = null, read = false }) {
-  await addDoc(collection(db, 'notifications'), {
+export async function createNotification({
+  userId,
+  message,
+  type = 'general',
+  campaignId = null,
+  campaignSlug = null,
+  read = false,
+}) {
+  const payload = {
     userId,
     message,
     type,
     campaignId,
     read,
     createdAt: serverTimestamp(),
-  });
+  };
+  if (campaignSlug) payload.campaignSlug = campaignSlug;
+  await addDoc(collection(db, 'notifications'), payload);
 }
 
 /** @deprecated Use createNotification({ userId, message }) */
@@ -30,7 +39,7 @@ export async function createLegacyNotification(userId, message) {
   return createNotification({ userId, message });
 }
 
-export function subscribeToNotifications(userId, callback) {
+export function subscribeToNotifications(userId, callback, onError) {
   if (!userId) return () => {};
   const q = query(
     collection(db, 'notifications'),
@@ -40,7 +49,10 @@ export function subscribeToNotifications(userId, callback) {
   return onSnapshot(
     q,
     (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-    () => callback([])
+    (err) => {
+      if (onError) onError(err);
+      else callback([]);
+    }
   );
 }
 

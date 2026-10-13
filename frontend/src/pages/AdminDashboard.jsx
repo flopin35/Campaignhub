@@ -1,700 +1,377 @@
-import { useState, useEffect, useMemo } from 'react';
-
-import { motion } from 'framer-motion';
-
-import { collection, getDocs } from 'firebase/firestore';
-
-import { useAuth } from '../context/AuthContext';
-
-import { useToast } from '../context/ToastContext';
-
-import Sidebar from '../components/Sidebar';
-
-import AnalyticsWidget from '../components/AnalyticsWidget';
-
-import BoostBadge from '../components/BoostBadge';
-
-import { AdminVerificationPanel, AdminReportsPanel, AdminCommentsPanel, handleExtensionApproval } from '../components/admin/AdminPanels';
-
-import { useAdminCampaigns } from '../hooks/useCampaigns';
-
+import { useEffect, useMemo, useState } from 'react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import {
-
-  deleteCampaign,
-
-  extendCampaign,
-
-  toggleFeatured,
-
-  toggleSpotlight,
-
-  toggleCampaignDisabled,
-
-  approveCampaign,
-
-} from '../services/campaignFirestoreService';
-
-import { activateCampaignBoost, clearCampaignBoost } from '../services/boostService';
-
-import { BOOST_PACKAGES } from '../data/boostPackages';
-
-import {
-  verifyPaymentAndActivate,
-  verifyPremiumPayment,
-  rejectPayment,
-  getPaymentByCampaign,
-  getRevenueSummary,
-  scorePaymentPriority,
-} from '../services/paymentService';
-
-import { verifyCampaign } from '../services/verificationService';
-
-import { formatDate, getStatusBadgeClass } from '../utils/helpers';
-
-import { getStatusLabel, isBoostActive } from '../utils/campaignHelpers';
-
-import { PACKAGES } from '../data/packages';
-
+  Search,
+  Crown,
+  BadgeCheck,
+  Star,
+  EyeOff,
+  Eye,
+  Trash2,
+  ExternalLink,
+  Wallet,
+  Users,
+  Megaphone,
+  Flag,
+  Receipt,
+  Zap,
+  CircleCheck,
+  X,
+} from 'lucide-react';
 import { db } from '../firebase/auth';
-
-import { createNotification } from '../services/notificationService';
-
-import VerificationBadge from '../components/VerificationBadge';
-
-
-
-const FILTERS = [
-
-  { key: '', label: 'All' },
-
-  { key: 'pending', label: 'Pending Queue' },
-
-  { key: 'active', label: 'Active' },
-
-  { key: 'expired', label: 'Expired' },
-
-  { key: 'rejected', label: 'Rejected' },
-
-  { key: 'disabled', label: 'Disabled' },
-
-];
-
-
+import { useAdminCampaigns } from '../hooks/useCampaigns';
+import { useToast } from '../context/ToastContext';
+import { Card, CardHeader, Button, Badge, PageHeader, Tabs, EmptyState, Modal, Segmented } from '../components/ui';
+import { StatTile } from '../components/charts';
+import { adminGrantPro, adminEndPro, subscribeBillingTransactions } from '../services/adminService';
+import { deleteCampaign, toggleFeatured, toggleCampaignDisabled } from '../services/campaignFirestoreService';
+import { verifyCampaign } from '../services/verificationService';
+import { clearCampaignBoost } from '../services/boostService';
+import { verifyPremiumPayment, verifyPaymentAndActivate, rejectPayment } from '../services/paymentService';
+import { subscribeReports, resolveReport } from '../services/reportService';
+import { getBillingState, toMs, formatCedis } from '../utils/billing';
+import { isCampaignVisible, isBoostActive } from '../utils/campaignHelpers';
+import { formatDate, formatNumber, timeAgo, cn } from '../utils/format';
 
 export default function AdminDashboard() {
+  const { campaigns, loading } = useAdminCampaigns('');
+  const [tab, setTab] = useState('campaigns');
+  const [txs, setTxs] = useState([]);
+  const [legacy, setLegacy] = useState([]);
+  const [reports, setReports] = useState([]);
 
-  const { userProfile } = useAuth();
-
-  const { toast } = useToast();
-
-  const [filter, setFilter] = useState('');
-
-  const [search, setSearch] = useState('');
-
-  const [activeTab, setActiveTab] = useState('overview');
-
-  const [actionLoading, setActionLoading] = useState(null);
-
-  const [payments, setPayments] = useState({});
-
-  const [revenue, setRevenue] = useState(null);
-
-  const { campaigns, stats, loading, error } = useAdminCampaigns(filter);
-
-
-
+  useEffect(() => subscribeBillingTransactions(setTxs), []);
+  useEffect(() => subscribeReports(setReports), []);
   useEffect(() => {
-
-    getDocs(collection(db, 'payments')).then((snap) => {
-
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-      setRevenue(getRevenueSummary(all));
-
-      const map = {};
-
-      all.forEach((p) => {
-        const existing = map[p.campaignId];
-        map[p.campaignId] = !existing || scorePaymentPriority(p) > scorePaymentPriority(existing) ? p : existing;
-      });
-
-      setPayments(map);
-
-    });
-
-  }, [campaigns]);
-
-
-
-  const filteredCampaigns = useMemo(() => {
-
-    if (!search.trim()) return campaigns;
-
-    const q = search.toLowerCase();
-
-    return campaigns.filter(
-
-      (c) =>
-
-        c.title?.toLowerCase().includes(q) ||
-
-        c.slug?.toLowerCase().includes(q) ||
-
-        c.ownerName?.toLowerCase().includes(q) ||
-
-        payments[c.id]?.paymentReference?.toLowerCase().includes(q)
-
-    );
-
-  }, [campaigns, search, payments]);
-
-
-
-  const handleVerify = async (campaign) => {
-    setActionLoading(campaign.id + 'verify');
-    try {
-      const payment = payments[campaign.id] || await getPaymentByCampaign(campaign.id);
-      const isFree = campaign.packageType === 'free' || campaign.packagePrice === 0;
-
-      if (!payment && isFree) {
-        await approveCampaign(campaign.id, campaign.durationDays || 14);
-        await createNotification({
-          userId: campaign.ownerId,
-          message: `Your official campaign page "${campaign.title}" is now live!`,
-          type: 'campaign_approved',
-          campaignId: campaign.id,
-        });
-        toast(`"${campaign.title}" is now live!`, 'success');
-        return;
-      }
-
-      if (!payment || payment.paymentStatus !== 'pending_review') {
-        throw new Error('No payment awaiting review for this campaign.');
-      }
-
-      if (payment.purchaseType === 'premium' || payment.purchaseType === 'hosting') {
-        await verifyPremiumPayment({ paymentId: payment.id, campaignId: campaign.id, payment, campaign });
-        toast(`Premium activated for "${campaign.title}"`, 'success');
-        return;
-      }
-
-      if (payment.type === 'extension') {
-        await handleExtensionApproval({ payment, campaign, toast });
-      } else {
-        await verifyPaymentAndActivate({ paymentId: payment.id, campaignId: campaign.id, campaign, payment });
-        toast(`"${campaign.title}" is now live!`, 'success');
-      }
-    } catch (err) {
-      toast(err.message, 'error');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-
-
-  const handleReject = async (campaign) => {
-
-    const reason = prompt('Rejection reason (optional):') || 'Payment could not be verified';
-
-    setActionLoading(campaign.id + 'reject');
-
-    try {
-
-      const payment = payments[campaign.id] || await getPaymentByCampaign(campaign.id);
-      const isPremium = payment?.purchaseType === 'premium' || payment?.purchaseType === 'hosting';
-
-      await rejectPayment({
-        paymentId: payment?.id,
-        campaignId: campaign.id,
-        ownerId: campaign.ownerId,
-        reason,
-        isPremium,
-      });
-
-      toast('Payment rejected', 'warning');
-
-    } catch (err) {
-
-      toast(err.message, 'error');
-
-    } finally {
-
-      setActionLoading(null);
-
-    }
-
-  };
-
-
-
-  const handleAction = async (action, campaign, extra) => {
-
-    setActionLoading(campaign.id + action);
-
-    try {
-
-      switch (action) {
-
-        case 'extend':
-
-          await extendCampaign(campaign.id, extra || 7, campaign.endDate, campaign.durationDays);
-
-          toast('Hosting extended', 'success');
-
-          break;
-
-        case 'feature':
-
-          await toggleFeatured(campaign.id, !campaign.featured);
-
-          toast(campaign.featured ? 'Removed from featured' : 'Marked featured', 'success');
-
-          break;
-
-        case 'spotlight':
-
-          await toggleSpotlight(campaign.id, !campaign.spotlight);
-
-          toast(campaign.spotlight ? 'Spotlight removed' : 'Added to spotlight', 'success');
-
-          break;
-
-        case 'verify':
-
-          await verifyCampaign(campaign.id, !campaign.verified, campaign.ownerId, campaign.title);
-
-          toast(campaign.verified ? 'Authorization revoked' : 'Page authorized', 'success');
-
-          break;
-
-        case 'disable':
-
-          await toggleCampaignDisabled(campaign.id, !campaign.disabled);
-
-          toast(campaign.disabled ? 'Page re-enabled' : 'Page hidden from directory', 'info');
-
-          break;
-
-        case 'clearBoost':
-
-          await clearCampaignBoost(campaign.id, campaign);
-
-          toast('Boost cleared', 'info');
-
-          break;
-
-        case 'remove':
-
-          if (window.confirm('Delete this campaign permanently? This cannot be undone.')) {
-
-            await deleteCampaign(campaign.id);
-
-            toast('Campaign page removed', 'info');
-
-          }
-
-          break;
-
-        default:
-
-          break;
-
-      }
-
-    } catch (err) {
-
-      toast(err.message, 'error');
-
-    } finally {
-
-      setActionLoading(null);
-
-    }
-
-  };
-
-
-
-  const handleBoost = async (campaign, boostPackage) => {
-
-    setActionLoading(campaign.id + boostPackage.id);
-
-    try {
-
-      await activateCampaignBoost(campaign.id, boostPackage, campaign);
-
-      toast(`${boostPackage.name} activated`, 'success');
-
-    } catch (err) {
-
-      toast(err.message, 'error');
-
-    } finally {
-
-      setActionLoading(null);
-
-    }
-
-  };
-
-
-
-  const renderCampaignList = () => (
-
-    <div className="space-y-4">
-
-      {filteredCampaigns.map((c) => {
-
-        const pay = payments[c.id];
-
-        const pkg = PACKAGES.find((p) => p.id === c.packageType);
-
-        const isExtension = pay?.type === 'extension';
-
-        const isPremiumPayment = pay?.purchaseType === 'premium' || pay?.purchaseType === 'hosting';
-
-        const isPending = c.status === 'pending_review'
-          || c.status === 'payment_pending'
-          || (isExtension && pay?.paymentStatus === 'pending_review')
-          || (isPremiumPayment && pay?.paymentStatus === 'pending_review');
-
-
-
-        return (
-
-          <motion.div key={c.id} layout className="glass-card p-4 space-y-4">
-
-            <div className="flex flex-col sm:flex-row gap-4">
-
-              <img src={c.bannerImage} alt={c.title} className="w-full sm:w-24 h-32 sm:h-24 rounded-xl object-cover bg-surface-elevated" loading="lazy" />
-
-              <div className="flex-1 min-w-0">
-
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-
-                  <h3 className="font-semibold text-white">{c.title}</h3>
-
-                  <span className={getStatusBadgeClass(c.status)}>{getStatusLabel(c.status)}</span>
-
-                  <VerificationBadge verified={c.verified} label="Admin verified" />
-
-                  {c.paymentVerified && (
-
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-
-                      Payment confirmed
-
-                    </span>
-
-                  )}
-
-                  {c.verificationRequested && !c.verified && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
-                      Auth requested
-                    </span>
-                  )}
-
-                  {isPending && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/20">
-                      Pending Approval
-                    </span>
-                  )}
-
-                  {c.status === 'active' && !c.disabled && (
-
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-300 border border-brand-500/20">
-
-                      Page active
-
-                    </span>
-
-                  )}
-
-                  <BoostBadge campaign={c} />
-
-                  {isExtension && <span className="badge-pending text-[10px]">extension</span>}
-
-                  {c.disabled && <span className="badge-expired text-[10px]">disabled</span>}
-
-                </div>
-
-                <p className="text-xs text-gray-500">
-
-                  /{c.slug} · {c.ownerName} · {c.views || 0} views · {c.followerCount || 0} supporters
-
-                </p>
-
-                <p className="text-xs text-gray-500 mt-1">
-
-                  {pkg?.name || c.packageName} · {pay?.amount || pkg?.price || '—'} GHS
-
-                  {c.createdAt && <> · Created {formatDate(c.createdAt)}</>}
-
-                </p>
-
-                {pay && (
-
-                  <p className="text-xs text-brand-400 mt-1 font-mono">
-
-                    Ref: {pay.paymentReference} · {pay.paymentStatus}
-
-                  </p>
-
-                )}
-
-              </div>
-
-            </div>
-
-
-
-            {pay?.screenshotUrl && (
-
-              <a href={pay.screenshotUrl} target="_blank" rel="noopener noreferrer" className="block">
-
-                <img src={pay.screenshotUrl} alt="Payment proof" className="max-h-40 rounded-xl border border-surface-border" loading="lazy" />
-
-              </a>
-
-            )}
-
-
-
-            <div className="flex flex-wrap gap-2">
-
-              {isPending && (
-
-                <>
-
-                  <button onClick={() => handleVerify(c)} disabled={!!actionLoading} className="btn-primary text-xs py-2 px-4">
-
-                    {isExtension ? 'Approve Extension' : isPremiumPayment ? 'Verify Premium' : 'Verify & Activate'}
-
-                  </button>
-
-                  <button onClick={() => handleReject(c)} disabled={!!actionLoading} className="text-xs py-2 px-4 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20">
-
-                    Reject
-
-                  </button>
-
-                </>
-
-              )}
-
-              {c.status === 'active' && (
-
-                <>
-
-                  <button onClick={() => handleAction('extend', c, 7)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">+7 Days</button>
-
-                  <button onClick={() => handleAction('feature', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.featured ? 'Unfeature' : 'Feature'}</button>
-
-                  <button onClick={() => handleAction('spotlight', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.spotlight ? 'Remove Spotlight' : 'Spotlight'}</button>
-
-                  <button onClick={() => handleAction('verify', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.verified ? 'Revoke auth' : 'Authorize'}</button>
-
-                  <button onClick={() => handleAction('disable', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">{c.disabled ? 'Enable' : 'Disable'}</button>
-
-                  {isBoostActive(c) && (
-
-                    <button onClick={() => handleAction('clearBoost', c)} disabled={!!actionLoading} className="btn-secondary text-xs py-2 px-3">Clear Boost</button>
-
-                  )}
-
-                </>
-
-              )}
-
-              <button onClick={() => handleAction('remove', c)} disabled={!!actionLoading} className="text-xs py-2 px-3 text-gray-500 hover:text-red-400">Remove page</button>
-
-            </div>
-
-
-
-            {c.status === 'active' && !c.disabled && (
-
-              <div className="pt-2 border-t border-surface-border">
-
-                <p className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Activate Boost</p>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                  {BOOST_PACKAGES.map((bp) => (
-                    <button
-                      key={bp.id}
-                      type="button"
-                      onClick={() => handleBoost(c, bp)}
-                      disabled={!!actionLoading}
-                      className="text-left py-2 px-2.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 min-h-[44px] touch-manipulation"
-                    >
-                      <span className="text-[10px] block text-amber-400/80">{bp.label}</span>
-                      <span className="text-xs font-semibold">₵{bp.price}</span>
-                    </button>
-                  ))}
-                </div>
-
-              </div>
-
-            )}
-
-          </motion.div>
-
-        );
-
-      })}
-
-      {filteredCampaigns.length === 0 && (
-
-        <p className="text-center text-gray-500 py-16">
-
-          {search ? 'No campaign pages match your search.' : 'No campaign pages in this queue.'}
-
-        </p>
-
-      )}
-
-    </div>
-
-  );
-
-
+    getDocs(query(collection(db, 'payments'), where('paymentStatus', '==', 'pending_review')))
+      .then((snap) => setLegacy(snap.docs.map((d) => ({ id: d.id, ...d.data() }))))
+      .catch(() => setLegacy([]));
+  }, [campaigns.length]);
+
+  const stats = useMemo(() => {
+    const states = campaigns.map((c) => getBillingState(c));
+    const paid = txs.filter((t) => t.status === 'success');
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const active = campaigns.filter((c, i) => states[i].state === 'active' && !states[i].legacy);
+    const mrr = active.reduce((s, c) => s + (c.subscription?.cycle === 'yearly' ? 100 : 120), 0);
+    return {
+      total: campaigns.length,
+      live: campaigns.filter(isCampaignVisible).length,
+      pro: active.length,
+      trialing: states.filter((s) => s.state === 'trialing').length,
+      revenue: paid.reduce((s, t) => s + (t.amountPaid || t.amount || 0), 0),
+      month: paid.filter((t) => toMs(t.paidAt || t.createdAt) >= monthStart.getTime()).reduce((s, t) => s + (t.amountPaid || t.amount || 0), 0),
+      mrr,
+    };
+  }, [campaigns, txs]);
+
+  const openReports = reports.filter((r) => (r.status || 'open') === 'open');
 
   return (
-
-    <div className="flex flex-col lg:flex-row min-h-[calc(100vh-4rem)]">
-
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-
-      <div className="flex-1 p-4 sm:p-6 lg:p-8">
-
-        <div className="mb-6">
-
-          <h1 className="text-2xl font-bold text-white">CampaignHub Admin</h1>
-
-          <p className="text-sm text-gray-500">{userProfile?.email}</p>
-
-        </div>
-
-
-
-        {error && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{error}</div>}
-
-
-
-        {activeTab === 'overview' && stats && (
-
-          <div className="mb-8 space-y-6">
-
-            <AnalyticsWidget stats={stats} />
-
-            {revenue && (
-
-              <div className="grid sm:grid-cols-4 gap-4">
-
-                <div className="card text-center py-4">
-
-                  <div className="text-2xl font-bold text-emerald-400">{revenue.totalRevenue.toLocaleString()} GHS</div>
-
-                  <div className="text-xs text-gray-500 mt-1">Confirmed platform payments</div>
-
-                </div>
-
-                <div className="card text-center py-4">
-
-                  <div className="text-2xl font-bold text-amber-400">{revenue.pendingAmount.toLocaleString()} GHS</div>
-
-                  <div className="text-xs text-gray-500 mt-1">Pending review</div>
-
-                </div>
-
-                <div className="card text-center py-4">
-
-                  <div className="text-2xl font-bold text-white">{revenue.verifiedCount}</div>
-
-                  <div className="text-xs text-gray-500 mt-1">Confirmed payments</div>
-
-                </div>
-
-                <div className="card text-center py-4">
-
-                  <div className="text-2xl font-bold text-brand-400">{revenue.pendingCount}</div>
-
-                  <div className="text-xs text-gray-500 mt-1">Awaiting proof</div>
-
-                </div>
-
-              </div>
-
-            )}
-
-          </div>
-
-        )}
-
-
-
-        {(activeTab === 'overview' || activeTab === 'campaigns') && (
-
-          <>
-
-            <div className="flex flex-col sm:flex-row gap-3 mb-6">
-
-              <input
-
-                type="search"
-
-                value={search}
-
-                onChange={(e) => setSearch(e.target.value)}
-
-                placeholder="Search title, slug, owner, payment ref…"
-
-                className="input-field flex-1 text-sm"
-
-              />
-
-            </div>
-
-            <div className="flex flex-wrap gap-2 mb-6">
-
-              {FILTERS.map((f) => (
-
-                <button key={f.key || 'all'} onClick={() => setFilter(f.key)} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === f.key ? 'bg-brand-600/20 text-brand-400 border border-brand-500/30' : 'bg-surface-elevated text-gray-400'}`}>
-
-                  {f.label}
-
-                  {f.key === 'pending' && stats?.pending > 0 && (
-
-                    <span className="ml-1.5 text-amber-400">({stats.pending})</span>
-
-                  )}
-
-                </button>
-
-              ))}
-
-            </div>
-
-            {loading ? <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="card animate-pulse h-28 bg-surface-elevated" />)}</div> : renderCampaignList()}
-
-          </>
-
-        )}
-
-
-
-        {activeTab === 'verification' && <AdminVerificationPanel campaigns={campaigns} />}
-
-        {activeTab === 'reports' && <AdminReportsPanel />}
-
-        {activeTab === 'comments' && <AdminCommentsPanel />}
-
+    <div className="animate-fade-up">
+      <PageHeader eyebrow="Admin" title="CampaignHub control room" subtitle="Subscriptions, payments, campaign pages and reports." />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <StatTile label="Revenue this month" value={formatCedis(stats.month)} icon={Wallet} sub={`${formatCedis(stats.revenue)} all time`} accent />
+        <StatTile label="Monthly recurring (est.)" value={formatCedis(stats.mrr)} icon={Crown} sub={`${stats.pro} paying pages`} />
+        <StatTile label="On free trial" value={formatNumber(stats.trialing)} icon={Zap} sub="Convert before day 7" />
+        <StatTile label="Live pages" value={formatNumber(stats.live)} icon={Megaphone} sub={`${formatNumber(stats.total)} total`} />
       </div>
-
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'campaigns', label: 'Campaign pages', icon: Megaphone, count: campaigns.length },
+          { value: 'payments', label: 'Payments', icon: Receipt, count: txs.length },
+          { value: 'legacy', label: 'Manual MoMo proofs', icon: Wallet, count: legacy.length },
+          { value: 'reports', label: 'Reports', icon: Flag, count: openReports.length },
+        ]}
+      />
+      <div className="mt-6">
+        {tab === 'campaigns' && <CampaignsTable campaigns={campaigns} loading={loading} />}
+        {tab === 'payments' && <PaymentsTable txs={txs} />}
+        {tab === 'legacy' && <LegacyPayments payments={legacy} campaigns={campaigns} onDone={(id) => setLegacy((l) => l.filter((p) => p.id !== id))} />}
+        {tab === 'reports' && <ReportsList reports={reports} campaigns={campaigns} />}
+      </div>
     </div>
-
   );
-
 }
 
+function CampaignsTable({ campaigns, loading }) {
+  const { toast } = useToast();
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [grant, setGrant] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  const rows = campaigns.filter((c) => {
+    const b = getBillingState(c);
+    if (filter === 'pro' && b.state !== 'active') return false;
+    if (filter === 'trial' && b.state !== 'trialing') return false;
+    if (filter === 'lapsed' && !['grace', 'expired', 'trial_ended', 'unpaid'].includes(b.state)) return false;
+    if (q) {
+      const t = q.toLowerCase();
+      return `${c.title} ${c.ownerName} ${c.ownerEmail} ${c.slug} ${c.constituency}`.toLowerCase().includes(t);
+    }
+    return true;
+  });
+
+  const act = async (c, fn, msg) => {
+    setBusy(c.id);
+    try {
+      await fn();
+      if (msg) toast(msg, 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card pad={false} className="overflow-hidden">
+      <div className="p-4 sm:p-5 flex flex-col lg:flex-row gap-3 lg:items-center justify-between border-b border-line">
+        <div className="relative lg:w-80">
+          <Search className="w-4 h-4 text-ink-3 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input className="input pl-10" placeholder="Search title, owner, email…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <Segmented value={filter} onChange={setFilter} options={[{ value: 'all', label: 'All' }, { value: 'pro', label: 'Paying' }, { value: 'trial', label: 'Trial' }, { value: 'lapsed', label: 'Lapsed' }]} />
+      </div>
+      {loading ? (
+        <p className="p-6 text-sm text-ink-3">Loading…</p>
+      ) : rows.length === 0 ? (
+        <EmptyState compact text="No campaign pages match." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="table-base">
+            <thead>
+              <tr>
+                <th>Campaign</th>
+                <th>Owner</th>
+                <th>Plan</th>
+                <th className="text-right">Views</th>
+                <th>Created</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => {
+                const b = getBillingState(c);
+                return (
+                  <tr key={c.id} className={busy === c.id ? 'opacity-60' : ''}>
+                    <td>
+                      <a href={`/campaign/${c.slug}`} target="_blank" rel="noreferrer" className="font-medium text-ink hover:text-link inline-flex items-center gap-1">
+                        {c.title} <ExternalLink className="w-3 h-3" />
+                      </a>
+                      <span className="flex flex-wrap gap-1 mt-1">
+                        {c.verified && <Badge tone="info" className="h-5 text-[10px]">Verified</Badge>}
+                        {c.featured && <Badge tone="gold" className="h-5 text-[10px]">Featured</Badge>}
+                        {isBoostActive(c) && <Badge tone="gold" className="h-5 text-[10px]">Spotlight</Badge>}
+                        {isCampaignVisible(c) ? <Badge tone="success" className="h-5 text-[10px]">Live</Badge> : <Badge className="h-5 text-[10px]">Offline</Badge>}
+                      </span>
+                    </td>
+                    <td className="text-sm">
+                      {c.ownerName || '—'}
+                      <span className="block text-xs text-ink-3">{c.ownerEmail}</span>
+                    </td>
+                    <td>
+                      <Badge tone={b.tone}>{b.label}</Badge>
+                      {b.endsAt && <span className="block text-xs text-ink-3 mt-1">to {formatDate(b.endsAt)}</span>}
+                    </td>
+                    <td className="text-right num">{formatNumber(c.views)}</td>
+                    <td className="text-xs text-ink-3 whitespace-nowrap">{formatDate(c.createdAt)}</td>
+                    <td>
+                      <div className="flex justify-end gap-1">
+                        <IconBtn title="Grant / extend Pro" icon={Crown} onClick={() => setGrant(c)} />
+                        <IconBtn title={c.verified ? 'Remove verified badge' : 'Verify page'} icon={BadgeCheck} active={c.verified} onClick={() => act(c, () => verifyCampaign(c.id, !c.verified, c.ownerId, c.title), c.verified ? 'Badge removed' : 'Page verified')} />
+                        <IconBtn title={c.featured ? 'Unfeature' : 'Feature'} icon={Star} active={c.featured} onClick={() => act(c, () => toggleFeatured(c.id, !c.featured))} />
+                        {isBoostActive(c) && <IconBtn title="Clear Spotlight" icon={Zap} onClick={() => act(c, () => clearCampaignBoost(c.id, c), 'Spotlight cleared')} />}
+                        <IconBtn title={c.disabled ? 'Unhide' : 'Hide from public'} icon={c.disabled ? Eye : EyeOff} onClick={() => act(c, () => toggleCampaignDisabled(c.id, !c.disabled))} />
+                        <IconBtn
+                          title="Delete"
+                          icon={Trash2}
+                          danger
+                          onClick={() => window.confirm(`Delete "${c.title}" permanently?`) && act(c, () => deleteCampaign(c.id), 'Deleted')}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <GrantDialog campaign={grant} onClose={() => setGrant(null)} />
+    </Card>
+  );
+}
+
+function IconBtn({ icon: Icon, title, onClick, active, danger }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className={cn('btn btn-icon h-8 w-8', danger ? 'btn-danger-ghost' : 'btn-ghost', active && 'text-accent-ink bg-accent-soft')}
+    >
+      <Icon className="w-4 h-4" />
+    </button>
+  );
+}
+
+function GrantDialog({ campaign, onClose }) {
+  const { toast } = useToast();
+  const [days, setDays] = useState(30);
+  const [busy, setBusy] = useState(false);
+  if (!campaign) return null;
+  const b = getBillingState(campaign);
+  const run = async (fn, msg) => {
+    setBusy(true);
+    try {
+      await fn();
+      toast(msg, 'success');
+      onClose();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Manage Pro"
+      subtitle={`${campaign.title} · currently ${b.label}`}
+      footer={
+        <>
+          {b.state === 'active' && <Button variant="danger-ghost" className="mr-auto" onClick={() => run(() => adminEndPro(campaign), 'Pro ended')} disabled={busy}>End Pro now</Button>}
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => run(() => adminGrantPro(campaign, days), `Granted ${days} days of Pro`)} loading={busy}>Grant {days} days</Button>
+        </>
+      }
+    >
+      <p className="text-sm text-ink-2 mb-4">Use this for bank transfers, offline MoMo payments or partner deals. Days are added on top of any remaining time.</p>
+      <Segmented value={days} onChange={setDays} options={[{ value: 7, label: '7 days' }, { value: 30, label: '30 days' }, { value: 90, label: '90 days' }, { value: 365, label: '1 year' }]} />
+    </Modal>
+  );
+}
+
+function PaymentsTable({ txs }) {
+  const [filter, setFilter] = useState('success');
+  const rows = txs.filter((t) => (filter === 'all' ? true : filter === 'success' ? t.status === 'success' : t.status !== 'success'));
+  return (
+    <Card pad={false} className="overflow-hidden">
+      <div className="p-4 sm:p-5 border-b border-line">
+        <Segmented value={filter} onChange={setFilter} options={[{ value: 'success', label: 'Paid' }, { value: 'other', label: 'Incomplete' }, { value: 'all', label: 'All' }]} />
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState compact icon={Receipt} text="No payments here yet." />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="table-base">
+            <thead>
+              <tr><th>Date</th><th>Campaign</th><th>Item</th><th>Provider</th><th className="text-right">Amount</th><th>Status</th><th>Reference</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((t) => (
+                <tr key={t.id}>
+                  <td className="text-xs whitespace-nowrap">{formatDate(t.paidAt || t.createdAt)}<span className="block text-ink-3">{timeAgo(t.paidAt || t.createdAt)}</span></td>
+                  <td className="text-ink">{t.campaignTitle}<span className="block text-xs text-ink-3">{t.email}</span></td>
+                  <td className="text-sm">{t.itemName}</td>
+                  <td className="text-sm capitalize">{t.provider}{t.channel ? ` · ${t.channel}` : ''}</td>
+                  <td className="text-right num">{formatCedis(t.amountPaid || t.amount)}</td>
+                  <td><Badge tone={t.status === 'success' ? 'success' : t.status === 'failed' ? 'danger' : 'neutral'}>{t.status}</Badge></td>
+                  <td className="num text-xs">{t.reference}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function LegacyPayments({ payments, campaigns, onDone }) {
+  const { toast } = useToast();
+  const byId = Object.fromEntries(campaigns.map((c) => [c.id, c]));
+  if (!payments.length) {
+    return <Card><EmptyState icon={CircleCheck} title="No manual proofs waiting" text="New customers pay through Paystack or Flutterwave. Old MoMo screenshot proofs appear here." /></Card>;
+  }
+  const approve = async (p) => {
+    const campaign = byId[p.campaignId];
+    if (!campaign) {
+      toast('Campaign not found', 'error');
+      return;
+    }
+    try {
+      if (p.purchaseType === 'premium' || p.purchaseType === 'hosting') {
+        await verifyPremiumPayment({ paymentId: p.id, campaignId: p.campaignId, payment: p, campaign });
+      } else {
+        await verifyPaymentAndActivate({ paymentId: p.id, campaignId: p.campaignId, campaign, payment: p });
+      }
+      toast('Payment verified', 'success');
+      onDone(p.id);
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+  const reject = async (p) => {
+    try {
+      await rejectPayment({ paymentId: p.id, campaignId: p.campaignId, ownerId: p.userId, reason: 'Payment could not be verified', isPremium: true });
+      toast('Rejected', 'info');
+      onDone(p.id);
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      {payments.map((p) => (
+        <Card key={p.id}>
+          <CardHeader title={`${formatCedis(p.amount)} · ${p.packageName}`} subtitle={`${byId[p.campaignId]?.title || p.campaignId} · Ref ${p.paymentReference}`} />
+          {p.screenshotUrl && (
+            <a href={p.screenshotUrl} target="_blank" rel="noreferrer">
+              <img src={p.screenshotUrl} alt="Payment proof" className="max-h-56 rounded-xl border border-line" loading="lazy" />
+            </a>
+          )}
+          <div className="flex gap-2 mt-4">
+            <Button size="sm" icon={CircleCheck} onClick={() => approve(p)}>Verify</Button>
+            <Button size="sm" variant="ghost" icon={X} onClick={() => reject(p)}>Reject</Button>
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ReportsList({ reports, campaigns }) {
+  const { toast } = useToast();
+  const byId = Object.fromEntries(campaigns.map((c) => [c.id, c]));
+  if (!reports.length) return <Card><EmptyState icon={Flag} title="No reports" /></Card>;
+  return (
+    <Card pad={false}>
+      <ul className="divide-y divide-line">
+        {reports.map((r) => (
+          <li key={r.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-ink">{r.reason} <Badge tone={(r.status || 'open') === 'open' ? 'warning' : 'neutral'}>{r.status || 'open'}</Badge></p>
+              <p className="text-xs text-ink-3 mt-0.5">{byId[r.campaignId]?.title || r.campaignId} · {timeAgo(r.createdAt)}</p>
+              {r.details && <p className="text-sm text-ink-2 mt-1">{r.details}</p>}
+            </div>
+            {(r.status || 'open') === 'open' && (
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => resolveReport(r.id, 'resolved').then(() => toast('Resolved', 'success'))}>Resolve</Button>
+                <Button size="sm" variant="ghost" onClick={() => resolveReport(r.id, 'dismissed').then(() => toast('Dismissed', 'info'))}>Dismiss</Button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}

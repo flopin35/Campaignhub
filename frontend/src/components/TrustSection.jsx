@@ -12,12 +12,12 @@ const TRUST_POINTS = [
   {
     icon: BadgeCheck,
     title: 'Clear page status',
-    description: 'Active and archived pages are labelled plainly — no hidden or misleading campaign homes.',
+    description: 'Campaign pages are labelled Active, Hidden, Archived, or Retained — never silently erased without reason.',
   },
   {
     icon: FileArchive,
-    title: 'Public record',
-    description: 'Past campaign pages can remain available for the public record — not silently erased.',
+    title: 'Archive & retention',
+    description: 'Past campaign pages may be hidden, archived, or retained for the public record — not deleted by default.',
   },
   {
     icon: Mail,

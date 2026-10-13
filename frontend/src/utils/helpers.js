@@ -3,7 +3,7 @@
  */
 export function formatCountdown(remainingMs) {
   if (remainingMs == null) return 'Not started';
-  if (remainingMs <= 0) return 'Expired';
+  if (remainingMs <= 0) return 'Archived';
 
   const days = Math.floor(remainingMs / 86400000);
   const hours = Math.floor((remainingMs % 86400000) / 3600000);
@@ -37,7 +37,8 @@ export function getStatusBadgeClass(status) {
     approved: 'badge-pending',
     pending: 'badge-pending',
     expired: 'badge-expired',
-    rejected: 'badge-expired',
+    rejected: 'badge-rejected',
+    disabled: 'badge-hidden',
   };
   return map[status] || 'badge-pending';
 }

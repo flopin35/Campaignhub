@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { createNotification } from './notificationService';
+import { normalizePhone } from '../utils/format';
 
 const SUPPORTERS = 'supporters';
 
@@ -51,17 +52,30 @@ export async function registerSupporter({
   interests = [],
   isVolunteer = false,
   source = 'campaign_page',
+  pollingStation = '',
+  supportLevel = 'leaning',
+  adCode = '',
+  collectedBy = '',
+  notes = '',
+  fieldToken = '',
 }) {
   const payload = {
     campaignId,
     userId,
     name: name.trim(),
-    phone: phone.trim(),
+    phone: normalizePhone(phone),
     email: email.trim(),
     region,
     constituency,
+    pollingStation: String(pollingStation || '').trim().slice(0, 120),
+    supportLevel,
     interests,
     isVolunteer,
+    adCode: adCode || '',
+    collectedBy: String(collectedBy || '').slice(0, 80),
+    fieldToken: fieldToken || '',
+    notes: String(notes || '').slice(0, 1000),
+    contactCount: source === 'field' ? 1 : 0,
     volunteerStatus: isVolunteer ? 'pending' : null,
     totalDonated: 0,
     donationCount: 0,
@@ -74,10 +88,12 @@ export async function registerSupporter({
 
   const ref = await addDoc(collection(db, SUPPORTERS), payload);
 
-  const { trackLeadSignup } = await import('./analyticsService');
-  await trackLeadSignup(campaignId).catch(() => {});
+  if (source !== 'field') {
+    const { trackLeadSignup } = await import('./analyticsService');
+    await trackLeadSignup(campaignId, adCode).catch(() => {});
+  }
 
-  if (ownerId) {
+  if (ownerId && source !== 'field') {
     await createNotification({
       userId: ownerId,
       message: `New supporter: ${name}${region ? ` (${region})` : ''} signed up on "${campaignTitle}"`,

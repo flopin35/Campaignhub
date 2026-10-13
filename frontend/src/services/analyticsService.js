@@ -2,7 +2,6 @@ import {
   doc,
   getDoc,
   setDoc,
-  updateDoc,
   increment,
   serverTimestamp,
   onSnapshot,
@@ -58,41 +57,49 @@ const PLATFORM_SHARE_MAP = {
   tiktok: 'tiktokShares',
 };
 
-async function ensureAnalyticsDoc(campaignId) {
-  const ref = doc(db, ANALYTICS, campaignId);
-  try {
-    await setDoc(
-      ref,
-      { campaignId, ...DEFAULT_STATS, updatedAt: serverTimestamp() },
-      { merge: true },
-    );
-  } catch (err) {
-    console.warn('Analytics doc init skipped:', err.message);
-  }
-  return ref;
+function dayKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `d${y}${m}${d}`;
 }
 
-async function bump(campaignId, fields) {
+/** Increment counters. setDoc+merge with increment() creates the doc if needed and never resets totals. */
+async function bump(campaignId, fields, nested = {}) {
   try {
-    const ref = await ensureAnalyticsDoc(campaignId);
-    const updates = { updatedAt: serverTimestamp() };
+    const ref = doc(db, ANALYTICS, campaignId);
+    const payload = { campaignId, updatedAt: serverTimestamp() };
     Object.entries(fields).forEach(([key, val]) => {
-      updates[key] = increment(val);
+      payload[key] = increment(val);
     });
-    await updateDoc(ref, updates);
+    Object.entries(nested).forEach(([mapName, entries]) => {
+      payload[mapName] = {};
+      Object.entries(entries).forEach(([k, v]) => {
+        payload[mapName][k] = increment(v);
+      });
+    });
+    await setDoc(ref, payload, { merge: true });
   } catch (err) {
     console.warn('Analytics update skipped:', err.message);
   }
 }
 
+/** Valid ad tracking codes are short lowercase/alnum strings created by the Ads manager. */
+export function getAdCode(searchParams) {
+  const code = searchParams?.get?.('ad') || '';
+  return /^[a-z0-9]{4,12}$/.test(code) ? code : '';
+}
+
 /** Track page visit with referral source (?ref=) */
-export async function trackVisit(campaignId, referral = 'direct') {
+export async function trackVisit(campaignId, referral = 'direct', adCode = '') {
   const { incrementCampaignField } = await import('./campaignFirestoreService');
   await incrementCampaignField(campaignId, 'views');
 
   const fields = { totalViews: 1 };
 
-  if (referral === 'qr') {
+  if (adCode) {
+    fields.adVisitsTotal = 1;
+  } else if (referral === 'qr') {
     fields.qrScans = 1;
   } else if (referral === 'direct') {
     fields.directVisits = 1;
@@ -100,7 +107,9 @@ export async function trackVisit(campaignId, referral = 'direct') {
     fields[REFERRAL_VISIT_MAP[referral]] = 1;
   }
 
-  await bump(campaignId, fields);
+  const nested = { daily: { [dayKey()]: 1 } };
+  if (adCode) nested.adVisits = { [adCode]: 1 };
+  await bump(campaignId, fields, nested);
 }
 
 export async function trackLinkCopy(campaignId) {
@@ -135,9 +144,28 @@ export async function trackClick(campaignId) {
   await bump(campaignId, { ctaClicks: 1 });
 }
 
-export async function trackLeadSignup(campaignId) {
-  await bump(campaignId, { leadSignups: 1 });
+export async function trackLeadSignup(campaignId, adCode = '') {
+  const nested = { dailySignups: { [dayKey()]: 1 } };
+  if (adCode) nested.adSignups = { [adCode]: 1 };
+  await bump(campaignId, { leadSignups: 1 }, nested);
   return trackClick(campaignId);
+}
+
+/** Last N days of a daily map → [{ x: 'Oct 6', key, value }] */
+export function dailySeries(map = {}, days = 30) {
+  const out = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const key = dayKey(d);
+    out.push({
+      x: d.toLocaleDateString('en-GH', { day: 'numeric', month: 'short' }),
+      key,
+      value: Number(map?.[key] || 0),
+    });
+  }
+  return out;
 }
 
 export function subscribeCampaignAnalytics(campaignId, callback) {

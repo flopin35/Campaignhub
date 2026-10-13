@@ -97,3 +97,25 @@ export const aiService = {
 };
 
 export default aiService;
+
+export const STUDIO_TASKS = [
+  { id: 'speech', label: 'Rally speech', hint: 'Who is the audience and what do they care about? e.g. "Market women at Kaneshie, worried about rent and sanitation."' },
+  { id: 'social', label: 'Social posts', hint: 'What happened or what do you want people to do? e.g. "Thank everyone who came to the Madina rally; invite them to Saturday\'s clean-up."' },
+  { id: 'ad', label: 'Ad copy & radio script', hint: 'What is the ad promoting and to whom? e.g. "Youth jobs plan — 18–35 year olds in Tema West."' },
+  { id: 'sms', label: 'SMS / WhatsApp', hint: 'What should supporters do? e.g. "Remind supporters to check their names on the voter register this week."' },
+  { id: 'doorstep', label: 'Canvassing script', hint: 'Key message for volunteers going door to door.' },
+  { id: 'statement', label: 'Press statement', hint: 'What claim or event must you respond to? Give the facts.' },
+  { id: 'manifesto', label: 'Manifesto summary', hint: 'Paste your policy notes or bullet points.' },
+  { id: 'slogan', label: 'Slogans', hint: 'Your core promise in a sentence.' },
+  { id: 'strategy', label: 'Strategy advisor', hint: 'Describe your situation: days left, voter numbers, strong/weak areas, budget.' },
+];
+
+export const STUDIO_LANGUAGES = ['English', 'Twi', 'Fante', 'Ga', 'Ewe', 'Hausa', 'Dagbani', 'Pidgin'];
+export const STUDIO_TONES = ['Inspiring', 'Warm & personal', 'Energetic', 'Calm & factual', 'Urgent', 'Humble'];
+
+/** CampaignHub Pro AI Studio (server checks ownership + subscription). */
+export async function generateStudioDraft({ campaignId, task, prompt, language, tone }) {
+  const res = await api.post('/ai-studio', { campaignId, task, prompt, language, tone }, { timeout: 60000 });
+  if (!res.data?.success) throw new Error(res.data?.message || 'AI request failed');
+  return res.data.data;
+}

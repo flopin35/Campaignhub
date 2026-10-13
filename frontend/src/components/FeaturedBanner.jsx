@@ -28,7 +28,7 @@ export default function FeaturedBanner({ campaign }) {
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">{campaign.title}</h2>
         {campaign.ownerName && <p className="text-brand-400 text-sm mb-2">Candidate: {campaign.ownerName}</p>}
         <p className="text-gray-300 text-sm sm:text-base max-w-xl mb-4 line-clamp-2">{campaign.description}</p>
-        <Link to={`/campaign/${campaign.slug}`} className="btn-primary text-sm">View Official Page</Link>
+        <Link to={`/campaign/${campaign.slug}`} className="btn-primary text-sm">View Official Campaign Page</Link>
       </div>
     </motion.div>
   );

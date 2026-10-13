@@ -130,3 +130,53 @@ export function getDonationStats(donations = []) {
       .slice(0, 10),
   };
 }
+
+/** Public donor confirms they sent MoMo by entering the transaction ID (no login needed). */
+export async function submitDonationTxn({ donationId, momoTxnId }) {
+  await updateDoc(doc(db, 'donations', donationId), {
+    momoTxnId: String(momoTxnId || '').trim().slice(0, 40),
+    paymentStatus: 'pending_review',
+    proofSubmittedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Owner records a cash / offline / direct MoMo gift. */
+export async function recordOfflineDonation(campaignId, { donorName, donorPhone = '', amount, note = '', method = 'cash' }) {
+  const value = Number(amount);
+  if (!donorName?.trim()) throw new Error('Donor name is required');
+  if (!Number.isFinite(value) || value < 5) throw new Error('Amount must be at least ₵5');
+  const paymentReference = await generatePaymentReference();
+  const ref = await addDoc(collection(db, 'donations'), {
+    campaignId,
+    userId: null,
+    amount: value,
+    donorName: donorName.trim(),
+    donorPhone: donorPhone.trim(),
+    donorEmail: '',
+    region: '',
+    constituency: '',
+    anonymous: false,
+    recurring: false,
+    paymentReference,
+    paymentStatus: 'pending',
+    screenshotUrl: '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await updateDoc(ref, {
+    paymentStatus: 'verified',
+    method,
+    note: String(note).slice(0, 300),
+    verifiedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function rejectDonation(donationId) {
+  await updateDoc(doc(db, 'donations', donationId), {
+    paymentStatus: 'rejected',
+    updatedAt: serverTimestamp(),
+  });
+}

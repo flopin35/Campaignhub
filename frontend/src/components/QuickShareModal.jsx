@@ -27,7 +27,7 @@ export default function QuickShareModal({ campaign, onClose }) {
           className="glass-card w-full max-w-sm space-y-4"
         >
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-white">Share Campaign</h3>
+            <h3 className="font-semibold text-white">Share Official Campaign</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-white p-1" aria-label="Close">
               <X className="w-5 h-5" />
             </button>

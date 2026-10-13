@@ -142,10 +142,10 @@ export function ExtendCampaignBanner({ campaign, onExtend }) {
       <div>
         <p className="text-amber-400 font-medium text-sm inline-flex items-center gap-2">
           {daysLeft <= 3 && <AlertTriangle className="w-4 h-4 shrink-0" />}
-          {daysLeft <= 3 ? 'Campaign page expiring soon!' : 'Campaign page ending soon'}
+          {daysLeft <= 3 ? 'Hosting ending soon — page will be archived' : 'Hosting window ending soon'}
         </p>
         <p className="text-xs text-gray-400 mt-1">
-          {Math.ceil(daysLeft)} day{Math.ceil(daysLeft) !== 1 ? 's' : ''} remaining — extend hosting to stay in the directory.
+          {Math.ceil(daysLeft)} day{Math.ceil(daysLeft) !== 1 ? 's' : ''} remaining — extend hosting to keep your official campaign page Active in the directory.
         </p>
       </div>
       <button onClick={onExtend} className="btn-primary text-sm py-2 px-4 shrink-0">

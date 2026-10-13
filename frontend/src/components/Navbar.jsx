@@ -6,13 +6,15 @@ import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import VerifyEmailNotice from './VerifyEmailNotice';
 
-import { BRAND } from '../data/brand';
+import { BRAND, BRAND_COPY } from '../data/brand';
+import BrandMark from './BrandMark';
 
 const navLinks = [
   { to: '/', label: 'Home' },
-  { to: '/campaigns', label: 'Directory' },
-  { to: '/premium', label: 'Verification & Hosting' },
-  { to: '/dashboard', label: 'My Campaign Pages' },
+  { to: '/campaigns', label: BRAND_COPY.directory },
+  { to: '/premium', label: BRAND_COPY.hostingNav },
+  { to: '/dashboard', label: BRAND_COPY.myPages },
+  { to: '/about', label: 'About' },
 ];
 
 export default function Navbar() {
@@ -36,10 +38,8 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-600 to-brand-500 flex items-center justify-center text-white font-bold text-sm shadow-glow-sm group-hover:shadow-glow transition-shadow">
-              CH
-            </div>
-            <span className="font-bold text-lg text-white hidden xs:inline">{BRAND.name}</span>
+            <BrandMark size={36} className="transition-transform duration-300 group-hover:scale-[1.04]" />
+            <span className="font-bold text-lg text-white hidden xs:inline tracking-tight">{BRAND.name}</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-1">
@@ -82,7 +82,7 @@ export default function Navbar() {
                 <NotificationBell />
                 {isVerified && (
                   <Link to="/upload" className="btn-primary text-sm py-2 px-4 hidden sm:inline-flex">
-                    Launch Page
+                    {BRAND_COPY.launchCta}
                   </Link>
                 )}
                 <button onClick={handleLogout} className="btn-secondary text-sm py-2 px-3 hidden sm:inline-flex">

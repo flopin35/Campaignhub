@@ -1,51 +1,113 @@
-import { motion } from 'framer-motion';
-import { PACKAGES } from '../data/packages';
+import { useState } from 'react';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { Sun, Moon, Monitor, LogOut, Mail, User, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { db } from '../firebase/auth';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
+import { Card, CardHeader, Button, Input, PageHeader, KeyValue, Badge } from '../components/ui';
+import { useMyCampaigns } from '../context/WorkspaceContext';
+import { getBillingState } from '../utils/billing';
+import { cn } from '../utils/format';
 
 export default function Settings() {
-  const durations = [...new Set(PACKAGES.map((p) => p.durationDays))].sort((a, b) => a - b);
+  const { user, userProfile, setUserProfile, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const { toast } = useToast();
+  const { campaigns } = useMyCampaigns();
+  const navigate = useNavigate();
+  const [name, setName] = useState(userProfile?.name || user?.displayName || '');
+  const [phone, setPhone] = useState(userProfile?.phone || '');
+  const [saving, setSaving] = useState(false);
+
+  const save = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        name: name.trim(),
+        displayName: name.trim(),
+        phone: phone.trim(),
+        updatedAt: serverTimestamp(),
+      });
+      setUserProfile?.((p) => ({ ...(p || {}), name: name.trim(), displayName: name.trim(), phone: phone.trim() }));
+      toast('Profile saved', 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold text-white mb-2">Settings</h1>
-        <p className="text-gray-400 mb-8">Platform configuration and preferences.</p>
+    <div className="max-w-3xl animate-fade-up space-y-6">
+      <PageHeader title="Settings" subtitle="Your account, appearance and subscriptions." />
 
-        <div className="space-y-6">
-          <div className="card">
-            <h3 className="font-medium text-white mb-4">Platform Info</h3>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Version</span>
-                <span className="text-gray-300">1.0.0</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Payment Flow</span>
-                <span className="text-gray-300">Manual verification</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Auto-Expiry</span>
-                <span className="text-emerald-400">Enabled</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="card">
-            <h3 className="font-medium text-white mb-4">Campaign Durations</h3>
-            <div className="flex flex-wrap gap-2">
-              {durations.map((d) => (
-                <span key={d} className="badge-active">{d} days</span>
-              ))}
-            </div>
-          </div>
-
-          <div className="card">
-            <h3 className="font-medium text-white mb-2">Notifications</h3>
-            <p className="text-sm text-gray-500">
-              In-app notifications are delivered through Firestore and appear in your notification bell.
-            </p>
-          </div>
+      <Card as="form" onSubmit={save}>
+        <CardHeader title="Profile" icon={User} />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input label="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Input label="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" />
+          <Input className="sm:col-span-2" label="Email" value={user?.email || ''} disabled hint="Your sign-in email can't be changed here." />
         </div>
-      </motion.div>
+        <Button type="submit" className="mt-5" loading={saving}>Save profile</Button>
+      </Card>
+
+      <Card>
+        <CardHeader title="Appearance" />
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { id: 'light', label: 'Light', icon: Sun },
+            { id: 'dark', label: 'Dark', icon: Moon },
+            { id: 'system', label: 'System', icon: Monitor },
+          ].map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setTheme(o.id)}
+              className={cn('rounded-xl border p-4 flex flex-col items-center gap-2 text-sm font-medium', theme === o.id ? 'border-primary ring-2 ring-primary/15 text-ink' : 'border-line-strong text-ink-2 hover:bg-surface-2')}
+            >
+              <o.icon className="w-5 h-5" /> {o.label}
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Subscriptions" subtitle="Each campaign page has its own plan." icon={ShieldCheck} />
+        {campaigns.length === 0 ? (
+          <p className="text-sm text-ink-3">No campaign pages yet.</p>
+        ) : (
+          <div className="divide-y divide-line">
+            {campaigns.map((c) => {
+              const b = getBillingState(c);
+              return (
+                <KeyValue key={c.id} label={c.title} value={<Button size="sm" variant="ghost" to={`/dashboard/${c.id}/billing`}><Badge tone={b.tone}>{b.label}</Badge> Manage</Button>} />
+              );
+            })}
+          </div>
+        )}
+        <p className="text-xs text-ink-3 mt-4">
+          Free trial: {userProfile?.trialCampaignId ? 'used' : 'available — 7 days on your first campaign page'}
+        </p>
+      </Card>
+
+      <Card>
+        <CardHeader title="Account" icon={Mail} />
+        <p className="text-sm text-ink-2">Need to change your email, transfer a campaign to a new owner, or delete your account? Email campaignhubgh@gmail.com from your account address.</p>
+        <Button
+          className="mt-5"
+          variant="danger-ghost"
+          icon={LogOut}
+          onClick={async () => {
+            await logout();
+            navigate('/');
+          }}
+        >
+          Sign out
+        </Button>
+      </Card>
     </div>
   );
 }

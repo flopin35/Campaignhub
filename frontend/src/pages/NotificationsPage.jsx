@@ -1,60 +1,53 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Bell, CheckCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToNotifications, markNotificationRead, markAllNotificationsRead } from '../services/notificationService';
-import { NotificationIcon } from '../components/icons/AppIcons';
+import { subscribeToNotifications, markAllNotificationsRead, markNotificationRead } from '../services/notificationService';
+import { Card, Button, PageHeader, EmptyState } from '../components/ui';
+import { formatDateTime, cn } from '../utils/format';
 
 export default function NotificationsPage() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState([]);
+  const [items, setItems] = useState(null);
 
   useEffect(() => {
-    if (!user?.uid) return;
-    return subscribeToNotifications(user.uid, setNotifications);
+    if (!user?.uid) return undefined;
+    return subscribeToNotifications(user.uid, setItems, () => setItems([]));
   }, [user?.uid]);
 
-  const unread = notifications.filter((n) => !n.read).length;
+  const unread = (items || []).filter((n) => !n.read).length;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Notifications</h1>
-            <p className="text-sm text-gray-500">{unread} unread</p>
-          </div>
-          {unread > 0 && (
-            <button onClick={() => markAllNotificationsRead(user.uid)} className="btn-secondary text-sm">
-              Mark all read
-            </button>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          {notifications.length === 0 ? (
-            <p className="text-center text-gray-500 py-16">No notifications yet.</p>
-          ) : (
-            notifications.map((n) => (
-              <div
-                key={n.id}
-                className={`glass-card p-4 flex gap-3 ${!n.read ? 'border-brand-500/20' : ''}`}
-                onClick={() => !n.read && markNotificationRead(n.id)}
-              >
-                <NotificationIcon type={n.type} className="w-5 h-5 shrink-0 text-brand-400" />
-                <div className="flex-1">
-                  <p className="text-sm text-gray-300">{n.message}</p>
-                  {n.campaignId && (
-                    <Link to={`/campaigns`} className="text-xs text-brand-400 mt-1 inline-block">
-                      View campaign page →
-                    </Link>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </motion.div>
+    <div className="max-w-3xl animate-fade-up">
+      <PageHeader
+        title="Notifications"
+        subtitle="Payments, supporters, volunteers and account updates."
+        actions={unread > 0 && <Button variant="secondary" icon={CheckCheck} onClick={() => markAllNotificationsRead(user.uid)}>Mark all read</Button>}
+      />
+      <Card pad={false}>
+        {items === null ? (
+          <p className="p-6 text-sm text-ink-3">Loading…</p>
+        ) : items.length === 0 ? (
+          <EmptyState icon={Bell} title="Nothing yet" text="We'll let you know when supporters sign up, payments clear and more." />
+        ) : (
+          <ul className="divide-y divide-line">
+            {items.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => !n.read && markNotificationRead(n.id).catch(() => {})}
+                  className={cn('w-full text-left px-5 sm:px-6 py-4 flex gap-3 hover:bg-surface-2', !n.read && 'bg-info-soft/50')}
+                >
+                  <span className={cn('mt-1.5 w-2 h-2 rounded-full shrink-0', n.read ? 'bg-line-strong' : 'bg-link')} />
+                  <span className="min-w-0">
+                    <span className="block text-[15px] text-ink">{n.message}</span>
+                    <span className="block text-xs text-ink-3 mt-1">{formatDateTime(n.createdAt)}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }

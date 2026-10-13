@@ -21,8 +21,11 @@ export default function MobileNav() {
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-surface-border bg-surface/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
-      <div className="flex items-center justify-around h-16 px-1">
+    <nav
+      className="md:hidden fixed bottom-0 inset-x-0 z-50 border-t border-surface-border bg-surface/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]"
+      aria-label="Primary"
+    >
+      <div className="flex items-stretch justify-around h-16 px-1">
         {links.map((link) => {
           const active = location.pathname === link.to;
           const Icon = link.icon;
@@ -30,18 +33,19 @@ export default function MobileNav() {
             <Link
               key={link.to}
               to={link.to}
-              className={`flex flex-col items-center justify-center gap-0.5 min-w-[3.5rem] py-1 rounded-lg transition-colors ${
+              className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 py-1 rounded-lg transition-colors ${
                 active
                   ? 'text-brand-400'
                   : link.premiumActive
                     ? 'text-emerald-400'
                     : link.highlight
                       ? 'text-brand-400'
-                      : 'text-gray-500 hover:text-gray-300'
+                      : 'text-gray-400 hover:text-gray-200'
               }`}
+              aria-current={active ? 'page' : undefined}
             >
-              <Icon className={`w-5 h-5 ${link.highlight && !active ? 'text-brand-500' : ''}`} />
-              <span className="text-[10px] font-medium">{link.label}</span>
+              <Icon className={`w-5 h-5 shrink-0 ${link.highlight && !active ? 'text-brand-500' : ''}`} aria-hidden />
+              <span className="text-[10px] font-medium truncate max-w-full px-0.5 whitespace-nowrap">{link.label}</span>
             </Link>
           );
         })}

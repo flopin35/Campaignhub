@@ -462,7 +462,7 @@ export default function PremiumUpgradeModal({
 
                   <Link to="/upload" className="btn-primary text-sm" onClick={onClose}>
 
-                    Launch Campaign
+                    Launch Campaign Page
 
                   </Link>
 

@@ -46,3 +46,4 @@ firebase-debug.log
 # Cursor / agent
 .cursor/
 .vercel
+.env*

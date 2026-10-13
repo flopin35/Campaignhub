@@ -13,9 +13,9 @@ export default function AuthTrustBadge({ compact = false }) {
   return (
     <div className="grid grid-cols-3 gap-2 pt-2">
       {[
-        { icon: Shield, label: 'Secure', sub: 'Firebase Auth' },
-        { icon: Lock, label: 'Encrypted', sub: 'End-to-end' },
-        { icon: Zap, label: 'Fast', sub: 'Instant login' },
+        { icon: Shield, label: 'Secure', sub: 'Protected sign-in' },
+        { icon: Lock, label: 'Private', sub: 'Your pages stay yours' },
+        { icon: Zap, label: 'Ready', sub: 'Launch a campaign page' },
       ].map(({ icon: Icon, label, sub }) => (
         <div
           key={label}

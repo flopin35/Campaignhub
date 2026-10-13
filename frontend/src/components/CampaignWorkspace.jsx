@@ -21,7 +21,7 @@ import {
 const TABS = [
   { id: 'overview', label: 'Overview', short: 'Home', icon: MapPin, premium: false },
   { id: 'distribute', label: 'Share formats', short: 'Share', icon: Share2, premium: true, feature: 'distribute' },
-  { id: 'analytics', label: 'Page stats', short: 'Stats', icon: BarChart3, premium: false },
+  { id: 'analytics', label: 'Public Page Activity', short: 'Activity', icon: BarChart3, premium: false },
   { id: 'events', label: 'Events', short: 'Events', icon: Calendar, premium: true, feature: 'crm' },
   { id: 'supporters', label: 'Supporters', short: 'Supporters', icon: Users, premium: true, feature: 'supporters' },
   { id: 'donations', label: 'Donations', short: 'MoMo', icon: Wallet, premium: true, feature: 'supporters' },
@@ -80,7 +80,7 @@ export default function CampaignWorkspace({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center min-h-[320px]">
         <LayoutPlaceholder />
-        <p className="text-sm text-gray-500 mt-4 max-w-xs">Select a campaign page from the list to view stats, share your official link, and manage your page.</p>
+        <p className="text-sm text-gray-500 mt-4 max-w-xs">Select a campaign page to view public page activity, share your official campaign link, and manage your official presence.</p>
       </div>
     );
   }
@@ -136,7 +136,16 @@ export default function CampaignWorkspace({
       <div className="flex flex-col gap-3">
         <div className="min-w-0">
           <h2 className="text-base sm:text-lg font-semibold text-white line-clamp-2">{campaign.title}</h2>
-          <p className="text-xs text-gray-500 mt-0.5 capitalize">{campaign.status?.replace(/_/g, ' ')} · {campaign.views || 0} views</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {campaign.status === 'disabled' || campaign.disabled
+              ? 'Hidden'
+              : campaign.isExpired || campaign.status === 'expired'
+                ? 'Archived'
+                : campaign.status === 'active'
+                  ? 'Active'
+                  : (campaign.status || 'Pending').replace(/_/g, ' ')}
+            {' · '}{campaign.views || 0} page views
+          </p>
         </div>
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
           <button
@@ -150,7 +159,7 @@ export default function CampaignWorkspace({
             <ExternalLink className="w-3.5 h-3.5" /> View official page
           </Link>
           {campaign.status === 'active' && onExtend && (
-            <button type="button" onClick={onExtend} className="btn-secondary text-xs py-2.5 px-3">Extend</button>
+            <button type="button" onClick={onExtend} className="btn-secondary text-xs py-2.5 px-3">Extend hosting</button>
           )}
           {onRelaunch && (
             <button
@@ -159,12 +168,16 @@ export default function CampaignWorkspace({
               disabled={relaunching}
               className="btn-primary text-xs py-2.5 px-3 disabled:opacity-50"
             >
-              {relaunching ? 'Relaunching…' : 'Relaunch page'}
+              {relaunching ? 'Relaunching…' : 'Relaunch campaign page'}
             </button>
           )}
           {onDelete && (
             <button type="button" onClick={onDelete} disabled={hiding} className="text-xs py-2.5 px-3 min-h-[44px] rounded-xl border border-red-500/20 text-red-400 hover:bg-red-500/10 touch-manipulation disabled:opacity-50">
-              {hiding ? 'Working…' : campaign.status === 'active' && !campaign.isExpired ? 'Hide page' : 'Remove archived page'}
+              {hiding
+                ? 'Working…'
+                : campaign.status === 'active' && !campaign.isExpired
+                  ? 'Hide from directory'
+                  : 'Permanently remove'}
             </button>
           )}
         </div>
@@ -176,10 +189,10 @@ export default function CampaignWorkspace({
         <div className="p-3 rounded-xl bg-brand-600/10 border border-brand-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Lock className="w-4 h-4 text-brand-400 shrink-0" />
-            <p className="text-xs text-gray-400">Free plan: official page, link &amp; QR. Upgrade for authorization review path, sharing formats &amp; page activity.</p>
+            <p className="text-xs text-gray-400">Free plan: official campaign page, official campaign link &amp; QR. Upgrade for authorization review, share formats &amp; public page activity.</p>
           </div>
           <button type="button" onClick={() => openPremiumModal({ campaign, planId: 'premium-subscription' })} className="btn-primary text-xs py-2.5 px-4 w-full sm:w-auto shrink-0">
-            Go official — ₵500/mo
+            Official presence — ₵500/mo
           </button>
         </div>
       ) : null}

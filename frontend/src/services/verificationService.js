@@ -27,7 +27,9 @@ export async function verifyUser(userId, verified = true) {
   });
   await createNotification({
     userId,
-    message: verified ? 'Your account has been verified.' : 'Account verification has been revoked.',
+    message: verified
+      ? 'Your CampaignHub account has been confirmed by admin.'
+      : 'Admin confirmation has been removed from your account.',
     type: verified ? 'user_verified' : 'verification_revoked',
   });
 }

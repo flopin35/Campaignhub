@@ -13,8 +13,8 @@ export default function AdBoostPricing({ onSelect, selectedId = null, compact = 
             <Zap className="w-4 h-4 text-amber-400" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">Choose spotlight duration</p>
-            <p className="text-xs text-gray-500">Homepage placement · directory priority</p>
+            <p className="text-sm font-semibold text-white">Choose directory spotlight duration</p>
+            <p className="text-xs text-gray-400">Paid placement · separate from the Official Page badge</p>
           </div>
         </div>
       )}
@@ -53,7 +53,7 @@ export default function AdBoostPricing({ onSelect, selectedId = null, compact = 
                         : 'bg-brand-600/20 text-brand-300 border border-brand-500/30'
                     }`}
                   >
-                    {pkg.featured ? 'Longest' : 'Common'}
+                    {pkg.featured ? 'Extended' : 'Full day'}
                   </span>
                 )}
               </div>

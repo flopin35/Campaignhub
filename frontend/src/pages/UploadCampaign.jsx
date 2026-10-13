@@ -1,281 +1,238 @@
-import { useState } from 'react';
-
-import { Link } from 'react-router-dom';
-
-import { CheckCircle2 } from '../components/icons/AppIcons';
-
-import { motion } from 'framer-motion';
-
-import UploadForm from '../components/UploadForm';
-
-import CopyLinkButton from '../components/CopyLinkButton';
-
-import UploadProgressBar from '../components/UploadProgressBar';
-
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Check, ImagePlus, Sparkles, Rocket, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-
 import { useToast } from '../context/ToastContext';
-
+import { Card, Button, Input, Select, Textarea, Alert } from '../components/ui';
+import { CheckoutDialog } from '../components/billing/Checkout';
 import { createCampaign } from '../services/campaignFirestoreService';
+import { GHANA_REGIONS, getConstituenciesForRegion } from '../data/ghanaRegions';
+import { OFFICE_LEVELS } from '../utils/campaignHelpers';
+import { canStartTrial } from '../utils/billing';
+import { sectionPath } from '../data/workspaceNav';
+import { cn } from '../utils/format';
 
-import { getCampaignUrl } from '../utils/helpers';
+const STEPS = ['Candidate', 'Message', 'Photos', 'Launch'];
 
-import { PACKAGES } from '../data/packages';
-
-import { createNotification } from '../services/notificationService';
-
-import { BRAND_COPY } from '../data/brand';
-
-
-
-const FREE_PKG = PACKAGES[0];
-
-
-
-export default function UploadCampaign() {
-
-  const { user, userProfile } = useAuth();
-
+export default function NewCampaign() {
+  const { user, userProfile, setUserProfile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({
+    candidateName: userProfile?.name || user?.displayName || '',
+    campaignType: 'Parliamentary',
+    party: '',
+    region: '',
+    constituency: '',
+    title: '',
+    slogan: '',
+    description: '',
+    electionDate: '',
+    priorities: [{ title: '', text: '' }, { title: '', text: '' }, { title: '', text: '' }],
+    contactPhone: '',
+  });
+  const [banner, setBanner] = useState(null);
+  const [logo, setLogo] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [created, setCreated] = useState(null);
+  const trial = canStartTrial(userProfile);
 
-  const [loading, setLoading] = useState(false);
+  const suggestedTitle = useMemo(() => {
+    if (!form.candidateName) return '';
+    const place = form.constituency || form.region;
+    return place ? `${form.candidateName} for ${place}` : `${form.candidateName} ${form.campaignType === 'Presidential' ? 'for President' : 'Campaign'}`;
+  }, [form.candidateName, form.constituency, form.region, form.campaignType]);
 
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const title = form.title || suggestedTitle;
 
-  const [uploadLabel, setUploadLabel] = useState('');
+  const canNext = [
+    form.candidateName.trim().length > 1 && !!form.campaignType,
+    true,
+    true,
+    true,
+  ][step];
 
-  const [error, setError] = useState('');
-
-  const [done, setDone] = useState(null);
-
-
-
-  const handleLaunch = async (data) => {
-
-    if (!data?.form || !data?.bannerFile) {
-
-      toast('Please fill in all required fields', 'warning');
-
-      return;
-
-    }
-
-    if (!user?.uid) {
-
-      toast('You must be signed in to launch a campaign page', 'error');
-
-      return;
-
-    }
-
-
-
-    setLoading(true);
-
-    setError('');
-
-    setUploadProgress(0);
-
-    setUploadLabel('Starting upload…');
-
-
-
+  const launch = async () => {
+    setProgress({ pct: 2, label: 'Starting…' });
     try {
-
-      const created = await createCampaign({
-
-        form: data.form,
-
-        bannerFile: data.bannerFile,
-
-        logoFile: data.logoFile,
-
-        galleryFiles: data.galleryFiles || [],
-
-        ownerId: user.uid,
-
-        ownerName: userProfile?.name || user.displayName || 'Campaign Owner',
-
-        ownerEmail: user.email,
-
-        pkg: FREE_PKG,
-
-        onUploadProgress: (pct, label) => {
-
-          setUploadProgress(pct);
-
-          if (label) setUploadLabel(label);
-
-        },
-
+      const c = await createCampaign({
+        form: { ...form, title },
+        bannerFile: banner,
+        logoFile: logo,
+        owner: { uid: user.uid, name: userProfile?.name || user.displayName || form.candidateName, email: user.email },
+        useTrial: trial,
+        onUploadProgress: (pct, label) => setProgress({ pct, label }),
       });
-
-
-
-      setUploadProgress(100);
-
-      setUploadLabel('Upload complete');
-
-
-
-      try {
-
-        await createNotification({
-
-          userId: user.uid,
-
-          message: 'Your campaign page is now live on CampaignHub!',
-
-          type: 'campaign_live',
-
-          campaignId: created.id,
-
-        });
-
-      } catch {
-
-        /* optional */
-
+      if (trial) {
+        setUserProfile?.((p) => ({ ...(p || {}), trialCampaignId: c.id }));
+        toast('Your campaign is live and your 7-day Pro trial has started!', 'success');
+        navigate(sectionPath(c.id), { replace: true });
+      } else {
+        toast('Campaign saved. Choose a plan to publish it.', 'success');
+        setCreated(c);
       }
-
-
-
-      const url = getCampaignUrl(created.slug);
-
-      try {
-
-        await navigator.clipboard.writeText(url);
-
-        toast('Campaign page live! Link copied to clipboard.', 'success');
-
-      } catch {
-
-        toast('Campaign page launched! It is live on the public site.', 'success');
-
-      }
-
-      setDone({ ...created, free: true, live: true });
-
     } catch (err) {
-
-      const msg = err.message || 'Failed to create campaign page';
-
-      setError(msg);
-
-      toast(msg, 'error');
-
-      console.error('Create campaign error:', err);
-
+      toast(err.message || 'Could not create campaign', 'error');
     } finally {
-
-      setLoading(false);
-
+      setProgress(null);
     }
-
   };
 
-
-
-  if (done) {
-
-    const url = getCampaignUrl(done.slug);
-
-    return (
-
-      <div className="max-w-2xl mx-auto px-4 py-16">
-
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card text-center">
-
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
-
-            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-
-          </div>
-
-          <h2 className="text-2xl font-bold text-white mb-2">{BRAND_COPY.successTitle}</h2>
-
-          <p className="text-sm text-gray-500 mb-6">
-
-            {BRAND_COPY.successSubtext}
-
-          </p>
-
-          <div className="bg-surface-elevated rounded-xl p-4 mb-6">
-
-            <p className="text-xs text-gray-500 mb-1">Official campaign link</p>
-
-            <p className="text-sm text-brand-400 break-all">{url}</p>
-
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-
-            <Link to={`/campaign/${done.slug}`} className="btn-primary text-sm">View Campaign Page</Link>
-
-            <CopyLinkButton url={url} campaignId={done.id} />
-
-            <Link to="/dashboard" className="btn-secondary text-sm">My Campaign Pages</Link>
-
-          </div>
-
-        </motion.div>
-
-      </div>
-
-    );
-
-  }
-
-
+  const preview = (file) => (file ? URL.createObjectURL(file) : null);
+  const bannerUrl = useMemo(() => preview(banner), [banner]);
+  const logoUrl = useMemo(() => preview(logo), [logo]);
 
   return (
+    <div className="max-w-3xl mx-auto animate-fade-up">
+      <p className="eyebrow">New campaign page</p>
+      <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mt-2">Set up your campaign</h1>
+      <p className="text-ink-3 mt-1.5">You can change everything later in Campaign page settings.</p>
 
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <ol className="mt-6 mb-6 grid grid-cols-4 gap-2" aria-label="Progress">
+        {STEPS.map((s, i) => (
+          <li key={s}>
+            <div className={cn('h-1.5 rounded-full', i <= step ? 'bg-primary' : 'bg-surface-3')} />
+            <p className={cn('mt-2 text-xs font-medium', i === step ? 'text-ink' : 'text-ink-3')}>{i + 1}. {s}</p>
+          </li>
+        ))}
+      </ol>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-
-        <h1 className="text-3xl font-bold text-white mb-2">{BRAND_COPY.uploadTitle}</h1>
-
-        <p className="text-gray-500 text-sm">{BRAND_COPY.uploadSubtitle}</p>
-
-      </motion.div>
-
-
-
-      {error && (
-
-        <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{error}</div>
-
-      )}
-
-
-
-      <UploadForm onComplete={handleLaunch} defaultEmail={user?.email || ''} launching={loading} />
-
-
-
-      {loading && (
-
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-5 space-y-4 mt-6">
-
-          <div className="flex items-center gap-3">
-
-            <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin shrink-0" />
-
-            <p className="text-brand-400 text-sm">{uploadLabel || 'Uploading…'}</p>
-
+      <Card>
+        {step === 0 && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input className="sm:col-span-2" label="Candidate name" required value={form.candidateName} onChange={set('candidateName')} placeholder="e.g. Hon. Ama Mensah" autoFocus />
+            <Select label="Office you're running for" value={form.campaignType} onChange={set('campaignType')} options={OFFICE_LEVELS} />
+            <Input label="Party" value={form.party} onChange={set('party')} placeholder="Party name or Independent" />
+            <Select label="Region" value={form.region} onChange={set('region')} options={GHANA_REGIONS} placeholder="Select region" />
+            <div>
+              <Input label="Constituency / area" value={form.constituency} onChange={set('constituency')} list="new-constituencies" placeholder="e.g. Madina" />
+              <datalist id="new-constituencies">
+                {getConstituenciesForRegion(form.region).map((c) => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <Input className="sm:col-span-2" label="Campaign name" value={form.title} onChange={set('title')} placeholder={suggestedTitle || 'e.g. Ama Mensah for Madina'} hint="Shown as the title of your public page." />
           </div>
+        )}
 
-          <UploadProgressBar progress={uploadProgress} label={uploadLabel} status="uploading" />
+        {step === 1 && (
+          <div className="grid gap-4">
+            <Input label="Slogan" value={form.slogan} onChange={set('slogan')} placeholder="e.g. Madina deserves better" maxLength={80} />
+            <Textarea label="Your message to voters" rows={5} value={form.description} onChange={set('description')} placeholder="Who you are, why you're running, and what you'll change." />
+            <div>
+              <p className="label">Top priorities <span className="text-ink-3 font-normal text-xs ml-1">Optional</span></p>
+              <div className="space-y-2">
+                {form.priorities.map((p, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      className="input"
+                      value={p.title}
+                      placeholder={['Jobs for the youth', 'Good roads & drainage', 'Water in every home'][i] || 'Priority'}
+                      onChange={(e) => setForm((f) => ({ ...f, priorities: f.priorities.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)) }))}
+                    />
+                    {form.priorities.length > 1 && (
+                      <button type="button" className="btn btn-ghost btn-icon h-11 w-11" onClick={() => setForm((f) => ({ ...f, priorities: f.priorities.filter((_, j) => j !== i) }))} aria-label="Remove">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {form.priorities.length < 6 && (
+                <Button size="sm" variant="ghost" icon={Plus} className="mt-2" onClick={() => setForm((f) => ({ ...f, priorities: [...f.priorities, { title: '', text: '' }] }))}>Add priority</Button>
+              )}
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Election date" type="date" value={form.electionDate} onChange={set('electionDate')} optional />
+              <Input label="Campaign phone / WhatsApp" value={form.contactPhone} onChange={set('contactPhone')} optional />
+            </div>
+          </div>
+        )}
 
-        </motion.div>
+        {step === 2 && (
+          <div className="space-y-5">
+            <p className="text-sm text-ink-2">A strong banner and a clear portrait make your page look official. You can skip this and add them later.</p>
+            <label className="block">
+              <span className="label">Banner (wide, 1600×600)</span>
+              <span className="relative block aspect-[8/3] rounded-xl border border-dashed border-line-strong bg-surface-2 overflow-hidden cursor-pointer">
+                {bannerUrl && <img src={bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="inline-flex items-center gap-2 rounded-lg bg-surface/90 px-3 py-2 text-sm font-medium text-ink shadow-xs">
+                    <ImagePlus className="w-4 h-4" /> {banner ? 'Change banner' : 'Choose banner'}
+                  </span>
+                </span>
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(e) => setBanner(e.target.files?.[0] || null)} />
+              </span>
+            </label>
+            <label className="block w-40">
+              <span className="label">Portrait or logo</span>
+              <span className="relative block aspect-square rounded-xl border border-dashed border-line-strong bg-surface-2 overflow-hidden cursor-pointer">
+                {logoUrl && <img src={logoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface/90 px-2.5 py-1.5 text-xs font-medium text-ink shadow-xs">
+                    <ImagePlus className="w-4 h-4" /> {logo ? 'Change' : 'Choose'}
+                  </span>
+                </span>
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(e) => setLogo(e.target.files?.[0] || null)} />
+              </span>
+            </label>
+          </div>
+        )}
 
-      )}
+        {step === 3 && (
+          <div>
+            <div className="rounded-xl border border-line overflow-hidden">
+              <div className="h-24 relative" style={{ background: bannerUrl ? undefined : '#0f2747' }}>
+                {bannerUrl && <img src={bannerUrl} alt="" className="w-full h-full object-cover" />}
+              </div>
+              <div className="p-4">
+                <p className="font-bold text-ink">{title || 'Your campaign'}</p>
+                <p className="text-sm text-ink-3">{[form.campaignType, form.party, form.constituency || form.region].filter(Boolean).join(' · ')}</p>
+                {form.slogan && <p className="text-sm text-ink-2 mt-2 italic">“{form.slogan}”</p>}
+              </div>
+            </div>
+            {trial ? (
+              <Alert className="mt-5" tone="gold" icon={Sparkles} title="7-day free trial included">
+                Your page goes live immediately and every Pro tool is unlocked for 7 days. No payment needed now — after the trial it&apos;s ₵120/month or ₵1,200/year.
+              </Alert>
+            ) : (
+              <Alert className="mt-5" tone="info" icon={Rocket} title="Choose a plan to publish">
+                Your account has already used its free trial. We&apos;ll save this page, then you can pay ₵120/month or ₵1,200/year with MoMo or card to publish it.
+              </Alert>
+            )}
+            {progress && (
+              <div className="mt-5">
+                <div className="h-2 rounded-full bg-surface-3 overflow-hidden">
+                  <div className="h-full bg-primary transition-all" style={{ width: `${progress.pct}%` }} />
+                </div>
+                <p className="text-xs text-ink-3 mt-2">{progress.label}</p>
+              </div>
+            )}
+          </div>
+        )}
 
+        <div className="mt-8 flex items-center justify-between gap-3">
+          <Button variant="ghost" icon={ArrowLeft} onClick={() => (step ? setStep(step - 1) : navigate(-1))} disabled={!!progress}>
+            Back
+          </Button>
+          {step < 3 ? (
+            <Button iconRight={ArrowRight} onClick={() => setStep(step + 1)} disabled={!canNext}>
+              {step === 2 && !banner && !logo ? 'Skip for now' : 'Continue'}
+            </Button>
+          ) : (
+            <Button variant={trial ? 'gold' : 'primary'} icon={trial ? Rocket : Check} onClick={launch} loading={!!progress}>
+              {trial ? 'Launch & start free trial' : 'Save & choose plan'}
+            </Button>
+          )}
+        </div>
+      </Card>
+
+      <CheckoutDialog
+        open={!!created}
+        campaign={created}
+        onClose={() => navigate(sectionPath(created.id, 'billing'), { replace: true })}
+      />
     </div>
-
   );
-
 }
-
-

@@ -18,9 +18,9 @@ export default function TrustPaymentBlock({ compact = false }) {
           <Shield className="w-5 h-5 text-emerald-400" />
         </div>
         <div>
-          <h3 className="font-semibold text-white text-base">Secure payment process</h3>
+          <h3 className="font-semibold text-white text-base">Secure payment for official presence</h3>
           <p className="text-sm text-gray-500 mt-1 leading-relaxed">
-            Manual verification protects you and the platform. Every payment is reviewed before activation.
+            Admin reviews every payment before hosting or Premium activates. Payment confirmation is separate from the Official Page badge.
           </p>
         </div>
       </div>

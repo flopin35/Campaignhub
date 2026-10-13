@@ -1,6 +1,12 @@
 {
+  "functions": {
+    "api/auth/otp-send.js": { "maxDuration": 30 },
+    "api/auth/otp-verify.js": { "maxDuration": 20 },
+    "api/billing/[action].js": { "maxDuration": 30 },
+    "api/webhooks/[provider].js": { "maxDuration": 30 },
+    "api/ai-studio.js": { "maxDuration": 60 }
+  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

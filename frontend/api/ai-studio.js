@@ -1,0 +1,162 @@
+/**
+ * POST /api/ai-studio — CampaignHub Pro AI writer (speeches, ads, posts, statements…)
+ * Requires a signed-in owner of a campaign page that is on Pro or in trial.
+ * Daily cap per campaign keeps provider costs predictable.
+ */
+import {
+  HttpError,
+  applyCors,
+  sendJson,
+  requireAdminSdk,
+  requireUser,
+  loadOwnedCampaign,
+  campaignHasPro,
+} from './_lib/billing.js';
+
+const DAILY_LIMIT = Number(process.env.AI_STUDIO_DAILY_LIMIT || 80);
+
+const TASKS = {
+  speech: { label: 'Rally speech', maxTokens: 1400, guide: 'Write a stirring campaign speech to be delivered at a rally or town hall. Open strong, tell one short local story, list 3 concrete commitments, end with a call to vote. Use short spoken sentences and natural pauses (…).' },
+  social: { label: 'Social media posts', maxTokens: 900, guide: 'Write 3 distinct social media posts (Facebook, X/Twitter, Instagram/TikTok caption). Each with a hook, a clear message and a call to action. Add 3–5 relevant hashtags each. Label each post.' },
+  ad: { label: 'Ad copy', maxTokens: 900, guide: 'Write ad copy for a paid campaign: 3 headline options (max 40 characters), 2 primary text options (max 125 words), 1 radio script of 30 seconds with [SFX] cues, and 1 billboard line (max 7 words). Label each section.' },
+  sms: { label: 'SMS / WhatsApp message', maxTokens: 400, guide: 'Write 3 SMS/WhatsApp broadcast variants. Each MUST be under 160 characters, friendly, specific, with a clear action. Use {name} as a placeholder for the recipient\'s first name where natural.' },
+  statement: { label: 'Press statement / rebuttal', maxTokens: 1100, guide: 'Write a calm, factual press statement or rebuttal. Structure: headline, dateline, 3–4 short paragraphs, a quote from the candidate, and contact line. Never insult opponents; correct the record with facts the user provides.' },
+  manifesto: { label: 'Manifesto summary', maxTokens: 1000, guide: 'Turn the user\'s policy notes into a clear manifesto summary: a one-line vision, 5 priority pillars each with 2 concrete, measurable commitments, and a closing promise. Plain language a market woman or farmer would understand.' },
+  slogan: { label: 'Slogans', maxTokens: 400, guide: 'Generate 10 memorable campaign slogans (max 6 words each), mixing English and the chosen local language where natural. Then pick the best 2 and explain why in one line each.' },
+  doorstep: { label: 'Canvassing script', maxTokens: 800, guide: 'Write a door-to-door canvassing script for volunteers: greeting, 20-second pitch, 3 likely voter questions with short answers, how to ask for support, and how to record the voter\'s support level (strong / leaning / undecided / opposed).' },
+  strategy: { label: 'Strategy advice', maxTokens: 1200, guide: 'Act as a senior campaign strategist. Give a prioritized, practical action plan for the next 14 days based on the user\'s situation and data. Use numbered steps with owners and measurable targets.' },
+};
+
+const LANGUAGES = ['English', 'Twi', 'Fante', 'Ga', 'Ewe', 'Hausa', 'Dagbani', 'Pidgin'];
+
+function systemPrompt(campaign, language, tone) {
+  const facts = [
+    campaign.candidateName || campaign.ownerName ? `Candidate: ${campaign.candidateName || campaign.ownerName}` : '',
+    campaign.campaignType ? `Office: ${campaign.campaignType}` : '',
+    campaign.party ? `Party: ${campaign.party}` : '',
+    campaign.constituency ? `Constituency: ${campaign.constituency}` : '',
+    campaign.region ? `Region: ${campaign.region}` : '',
+    campaign.slogan ? `Slogan: ${campaign.slogan}` : '',
+    campaign.title ? `Campaign: ${campaign.title}` : '',
+    Array.isArray(campaign.priorities) && campaign.priorities.length
+      ? `Priorities: ${campaign.priorities.map((p) => p.title).filter(Boolean).join('; ')}`
+      : '',
+  ].filter(Boolean).join('\n');
+
+  return [
+    'You are CampaignHub Studio, an expert political communications writer for campaigns in Ghana.',
+    'You write truthful, persuasive, respectful content. Never invent statistics, endorsements or quotes from real people; use [placeholders] where facts are missing.',
+    'Never write content that attacks ethnic or religious groups, incites violence, or spreads misinformation about voting procedures.',
+    `Write in ${language}${language !== 'English' ? ' (if a phrase is hard to translate, keep it in English)' : ''}. Tone: ${tone}.`,
+    'Use Ghanaian context naturally (cedis, constituencies, polling stations, local markets, trotro, etc.) without stereotypes.',
+    facts ? `Campaign facts:\n${facts}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+async function callOpenAI(system, user, maxTokens) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        max_tokens: maxTokens,
+        temperature: 0.75,
+      }),
+      signal: AbortSignal.timeout(45000),
+    });
+    const data = await res.json();
+    if (!res.ok) return null;
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function callGemini(system, user, maxTokens) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const models = [...new Set([process.env.GEMINI_MODEL || 'gemini-2.0-flash', 'gemini-2.0-flash-lite'])];
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts: [{ text: user }] }],
+            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.8 },
+          }),
+          signal: AbortSignal.timeout(45000),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) continue;
+      const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('').trim();
+      if (text) return text;
+    } catch {
+      /* next model */
+    }
+  }
+  return null;
+}
+
+export default async function handler(req, res) {
+  applyCors(req, res, 'POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'POST') return sendJson(res, 405, { success: false, message: 'Method not allowed' });
+
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const task = TASKS[body.task] ? body.task : 'social';
+    const language = LANGUAGES.includes(body.language) ? body.language : 'English';
+    const tone = String(body.tone || 'inspiring').slice(0, 40);
+    const brief = String(body.prompt || '').trim().slice(0, 4000);
+    if (brief.length < 5) throw new HttpError(400, 'Tell the AI what you need (a sentence or two is enough).');
+
+    const admin = await requireAdminSdk();
+    const user = await requireUser(req, admin);
+    const campaign = await loadOwnedCampaign(admin, body.campaignId, user);
+    if (!campaignHasPro(campaign) && !user.isAdmin) {
+      throw new HttpError(402, 'AI Studio is part of CampaignHub Pro. Renew your plan to keep writing.', 'PRO_REQUIRED');
+    }
+
+    const day = new Date().toISOString().slice(0, 10);
+    const usageRef = admin.db.collection('ai_usage').doc(`${campaign.id}_${day}`);
+    const used = await admin.db.runTransaction(async (t) => {
+      const snap = await t.get(usageRef);
+      const count = snap.exists ? snap.data().count || 0 : 0;
+      if (count >= DAILY_LIMIT) return -1;
+      t.set(usageRef, { campaignId: campaign.id, day, count: count + 1, updatedAt: new Date() }, { merge: true });
+      return count + 1;
+    });
+    if (used < 0) {
+      throw new HttpError(429, `Daily AI limit reached (${DAILY_LIMIT} drafts). It resets at midnight.`);
+    }
+
+    const spec = TASKS[task];
+    const system = systemPrompt(campaign, language, tone);
+    const userMsg = `Task: ${spec.label}\nInstructions: ${spec.guide}\n\nWhat the campaign needs:\n${brief}`;
+
+    const text = (await callOpenAI(system, userMsg, spec.maxTokens))
+      || (await callGemini(system, userMsg, spec.maxTokens));
+
+    if (!text) {
+      throw new HttpError(503, 'The AI writer is busy right now. Please try again in a minute.');
+    }
+
+    return sendJson(res, 200, {
+      success: true,
+      data: { text, task, language, remainingToday: Math.max(0, DAILY_LIMIT - used) },
+    });
+  } catch (err) {
+    const status = err instanceof HttpError ? err.status : 500;
+    if (status >= 500) console.error('[ai-studio]', err);
+    return sendJson(res, status, { success: false, message: err.message || 'AI error', code: err.code });
+  }
+}

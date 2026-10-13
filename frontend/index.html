@@ -1,16 +1,47 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="CampaignHub — Digital campaign hosting and billboard ecosystem" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0f2747" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="CampaignHub Pro — the campaign operating system for Ghanaian politicians. Voter CRM, door-to-door canvassing, polling-station results collation, ad tracking, broadcasts and an AI speechwriter. ₵120/month."
+    />
+    <meta name="keywords" content="CampaignHub, Ghana election, campaign software, voter CRM, polling agents, results collation, political ads, parliamentary campaign, MMDCE" />
+    <meta property="og:title" content="CampaignHub Pro — Run a winning campaign in Ghana" />
+    <meta
+      property="og:description"
+      content="Know your voters, organise your field team, track every ad cedi and collate polling-station results live. 7-day free trial."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CampaignHub Pro — Run a winning campaign in Ghana" />
+    <meta
+      name="twitter:description"
+      content="Voter CRM, field team, election-day results, ads and AI — one tool, ₵120/month."
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <title>CampaignHub</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('ch-theme') || 'light';
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+    <title>CampaignHub Pro — Run a winning campaign in Ghana</title>
   </head>
-  <body class="bg-surface text-gray-100 antialiased">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

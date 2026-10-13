@@ -107,13 +107,13 @@ export default function QRCodeCard({ slug, title, campaignId }) {
 
       <div className="flex flex-wrap justify-center gap-2 mt-5">
         <button onClick={handleDownload} className="btn-primary text-xs py-2 px-4">
-          Download Campaign QR Code
+          Download Official Campaign QR Code
         </button>
         <button onClick={handleCopyImage} className="btn-secondary text-xs py-2 px-4">
           Copy QR Image
         </button>
         <button onClick={handlePrint} className="btn-secondary text-xs py-2 px-4">
-          Print Campaign QR Code
+          Print Official Campaign QR Code
         </button>
       </div>
     </div>

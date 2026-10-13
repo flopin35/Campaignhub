@@ -157,6 +157,8 @@ async function sendViaResend(to, code) {
   const from =
     process.env.OTP_EMAIL_FROM || 'CampaignHub <onboarding@resend.dev>';
   const { html, text, subject } = buildOtpEmailContent(code);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -172,6 +174,7 @@ async function sendViaResend(to, code) {
         html,
         text,
       }),
+      signal: controller.signal,
     });
 
     if (!res.ok) {
@@ -181,8 +184,10 @@ async function sendViaResend(to, code) {
     }
     return true;
   } catch (err) {
-    console.error('[OTP] Resend error:', err.message);
+    console.error('[OTP] Resend error:', err.name === 'AbortError' ? 'timeout' : err.message);
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -190,12 +195,21 @@ async function sendViaSmtp(to, code) {
   const creds = getSmtpCredentials();
   if (!creds) return false;
 
+  const port = Number(process.env.SMTP_PORT || 587);
+  // Port 465 = implicit TLS; 587 = STARTTLS. Never force secure=true on 587 (hangs on Vercel).
+  const secure = port === 465;
+
   const nodemailer = await import('nodemailer');
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: process.env.SMTP_SECURE === 'true',
+    port,
+    secure,
+    requireTLS: port === 587,
     auth: { user: creds.user, pass: creds.pass },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 12000,
+    tls: { minVersion: 'TLSv1.2' },
   });
 
   const { html, text, subject } = buildOtpEmailContent(code);
@@ -214,6 +228,12 @@ async function sendViaSmtp(to, code) {
     throw new Error(
       `Could not send email via Gmail (${creds.user}). Check SMTP_PASS or GMAIL_APP_PASSWORD on the server.`
     );
+  } finally {
+    try {
+      transporter.close();
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -224,6 +244,12 @@ function isLocalDevOtpLog() {
 
 export async function sendOtpEmail(to, code) {
   const errors = [];
+  // On Vercel prefer Resend (HTTP) when configured — SMTP often hangs behind serverless networking.
+  const preferResend = Boolean(process.env.VERCEL) && Boolean(getResendApiKey());
+
+  if (preferResend) {
+    if (await sendViaResend(to, code)) return 'resend';
+  }
 
   try {
     if (await sendViaSmtp(to, code)) return 'smtp';
@@ -231,7 +257,7 @@ export async function sendOtpEmail(to, code) {
     errors.push(err.message);
   }
 
-  if (await sendViaResend(to, code)) return 'resend';
+  if (!preferResend && (await sendViaResend(to, code))) return 'resend';
 
   if (isLocalDevOtpLog()) {
     console.info('[OTP] Dev code for', to, ':', code);

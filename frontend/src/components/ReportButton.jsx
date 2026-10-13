@@ -39,10 +39,11 @@ export default function ReportButton({ type = 'campaign', targetId, campaignId, 
   if (!open) {
     return (
       <button
+        type="button"
         onClick={() => (isAuthenticated ? setOpen(true) : toast('Sign in to report', 'warning'))}
-        className={`text-xs text-gray-500 hover:text-red-400 transition-colors inline-flex items-center gap-1.5 ${compact ? '' : 'btn-secondary py-2 px-3'}`}
+        className={`text-xs text-gray-400 hover:text-red-400 transition-colors inline-flex items-center gap-1.5 ${compact ? '' : 'btn-secondary py-2 px-3'}`}
       >
-        <Flag className="w-3.5 h-3.5" />
+        <Flag className="w-3.5 h-3.5" aria-hidden />
         Report
       </button>
     );
@@ -61,8 +62,8 @@ export default function ReportButton({ type = 'campaign', targetId, campaignId, 
         className="input-field text-sm"
       />
       <div className="flex gap-2">
-        <button onClick={submit} disabled={loading} className="btn-primary text-xs py-1.5 px-3">Submit</button>
-        <button onClick={() => setOpen(false)} className="btn-secondary text-xs py-1.5 px-3">Cancel</button>
+        <button type="button" onClick={submit} disabled={loading} className="btn-primary text-xs py-1.5 px-3">Submit</button>
+        <button type="button" onClick={() => setOpen(false)} className="btn-secondary text-xs py-1.5 px-3">Cancel</button>
       </div>
     </div>
   );

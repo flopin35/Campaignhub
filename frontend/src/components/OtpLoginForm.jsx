@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { otpService } from '../services/otpService';
 import { sanitizeEmail, sendEmailSignInLink } from '../services/authService';
 import { useToast } from '../context/ToastContext';
@@ -52,14 +51,19 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
       const msg = err.message || '';
       const shouldFallback =
         code === 'OTP_UNAVAILABLE' ||
+        code === 'NETWORK_ERROR' ||
         msg.includes('not configured') ||
         msg.includes('not enabled') ||
-        msg.includes('OTP service');
+        msg.includes('OTP service') ||
+        msg.includes('took too long') ||
+        msg.includes('could not reach') ||
+        msg.includes('timeout');
 
       if (shouldFallback) {
         try {
           await sendMagicLink();
           setError('');
+          toast('6-digit code unavailable — sent a sign-in link instead.', 'info');
         } catch (linkErr) {
           setError(
             linkErr.message ||
@@ -146,19 +150,19 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-xs text-emerald-400/90 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2">
+      <div className="flex items-center gap-2 text-xs text-success bg-success-soft border border-success/20 rounded-xl px-3 py-2">
         <Shield className="w-3.5 h-3.5 shrink-0" />
         <span>Email sign-in · code or secure link · check spam if missing</span>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm space-y-2">
+        <div className="p-3 bg-danger-soft border border-danger/20 rounded-xl text-danger text-sm space-y-2">
           <p>{error}</p>
           {onUsePassword && (
             <button
               type="button"
               onClick={() => onUsePassword(email)}
-              className="text-brand-400 hover:text-brand-300 text-xs font-medium"
+              className="text-link hover:underline text-xs font-medium"
             >
               Switch to password sign-in →
             </button>
@@ -166,20 +170,17 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
         </div>
       )}
 
-      <AnimatePresence mode="wait">
+      <>
         {step === 'email' ? (
-          <motion.form
+          <form
             key="email"
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 8 }}
             onSubmit={handleEmailSubmit}
-            className="space-y-4"
+            className="space-y-4 animate-fade-up"
           >
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Email address</label>
+              <label className="label">Email address</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-3" />
                 <input
                   type="email"
                   value={email}
@@ -187,22 +188,22 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
                   required
                   autoComplete="email"
                   placeholder="you@example.com"
-                  className="input-field pl-10"
+                  className="input pl-10"
                   disabled={loading}
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="hint">
                 We&apos;ll email a 6-digit code, or a secure sign-in link if codes aren&apos;t available.
               </p>
             </div>
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3 disabled:opacity-50">
+            <button type="submit" disabled={loading} className="btn btn-lg btn-primary w-full">
               {loading ? 'Sending…' : mode === 'signup' ? 'Send email & continue' : 'Send sign-in email'}
             </button>
             <button
               type="button"
               disabled={loading}
               onClick={handleSendLinkOnly}
-              className="w-full text-xs text-brand-400 hover:text-brand-300 transition-colors inline-flex items-center justify-center gap-1.5"
+              className="w-full text-xs text-link hover:underline inline-flex items-center justify-center gap-1.5"
             >
               <Link2 className="w-3.5 h-3.5" />
               Send secure link instead (no code)
@@ -211,27 +212,24 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
               <button
                 type="button"
                 onClick={() => onUsePassword(email)}
-                className="w-full text-xs text-gray-500 hover:text-brand-400 transition-colors"
+                className="w-full text-xs text-ink-3 hover:text-ink"
               >
                 Prefer password? Switch to password sign-in
               </button>
             )}
-          </motion.form>
+          </form>
         ) : step === 'link' ? (
-          <motion.div
+          <div
             key="link"
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }}
             className="space-y-4 text-center"
           >
-            <div className="w-12 h-12 rounded-full bg-brand-600/15 border border-brand-500/25 flex items-center justify-center mx-auto">
-              <Mail className="w-6 h-6 text-brand-400" />
+            <div className="w-12 h-12 rounded-full bg-info-soft flex items-center justify-center mx-auto">
+              <Mail className="w-6 h-6 text-info" />
             </div>
-            <p className="text-sm text-gray-300">
-              Sign-in link sent to <span className="text-white font-medium">{email}</span>
+            <p className="text-sm text-ink-2">
+              Sign-in link sent to <span className="text-ink font-medium">{email}</span>
             </p>
-            <p className="text-xs text-gray-500 leading-relaxed">
+            <p className="text-xs text-ink-3 leading-relaxed">
               Open the email from Firebase / CampaignHub and tap the link on this device.
               Check spam or promotions if you don&apos;t see it within a minute.
             </p>
@@ -242,7 +240,7 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
                   setStep('email');
                   setError('');
                 }}
-                className="text-gray-500 hover:text-gray-300"
+                className="text-ink-3 hover:text-ink"
               >
                 Change email
               </button>
@@ -259,7 +257,7 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
                     setLoading(false);
                   }
                 }}
-                className="text-brand-400 hover:text-brand-300 disabled:opacity-40"
+                className="text-link hover:underline disabled:opacity-40"
               >
                 {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend link'}
               </button>
@@ -268,22 +266,19 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
               <button
                 type="button"
                 onClick={() => onUsePassword(email)}
-                className="text-xs text-gray-500 hover:text-brand-400"
+                className="text-xs text-ink-3 hover:text-ink"
               >
                 Use password instead →
               </button>
             )}
-          </motion.div>
+          </div>
         ) : (
-          <motion.div
+          <div
             key="verify"
-            initial={{ opacity: 0, x: 8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }}
             className="space-y-4"
           >
-            <p className="text-sm text-gray-400 text-center">
-              6-digit code sent to <span className="text-white font-medium">{email}</span>
+            <p className="text-sm text-ink-2 text-center">
+              6-digit code sent to <span className="text-ink font-medium">{email}</span>
             </p>
             <div className="flex justify-center gap-2" onPaste={handlePaste}>
               {digits.map((d, i) => (
@@ -299,13 +294,13 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
                   onChange={(e) => handleDigitChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
                   disabled={loading}
-                  className="w-11 h-12 text-center text-lg font-semibold bg-surface-elevated border border-surface-border rounded-xl text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500/30 outline-none"
+                  className="w-11 h-12 text-center text-lg font-semibold bg-surface border border-line-strong rounded-xl text-ink focus:border-link focus:shadow-ring outline-none"
                   aria-label={`Digit ${i + 1}`}
                 />
               ))}
             </div>
             {loading && (
-              <p className="text-center text-sm text-brand-400 animate-pulse">Verifying securely…</p>
+              <p className="text-center text-sm text-link animate-pulse">Verifying securely…</p>
             )}
             <div className="flex flex-col gap-2 text-xs">
               <div className="flex items-center justify-between">
@@ -315,7 +310,7 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
                     setStep('email');
                     setError('');
                   }}
-                  className="text-gray-500 hover:text-gray-300"
+                  className="text-ink-3 hover:text-ink"
                 >
                   Change email
                 </button>
@@ -323,7 +318,7 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
                   type="button"
                   disabled={cooldown > 0 || loading}
                   onClick={sendCode}
-                  className="text-brand-400 hover:text-brand-300 disabled:opacity-40"
+                  className="text-link hover:underline disabled:opacity-40"
                 >
                   {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
                 </button>
@@ -341,14 +336,14 @@ export default function OtpLoginForm({ onSuccess, mode = 'login', onUsePassword 
                     setLoading(false);
                   }
                 }}
-                className="text-brand-400/80 hover:text-brand-300 text-center"
+                className="text-link hover:underline text-center"
               >
                 Didn&apos;t get a code? Send sign-in link instead
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </div>
   );
 }

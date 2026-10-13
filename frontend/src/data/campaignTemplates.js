@@ -38,7 +38,7 @@ export const CAMPAIGN_TEMPLATES = [
     campaignType: 'Party',
     title: 'Official party campaign page',
     description:
-      'The official digital presence for our party branch. News, events, and verified information for members and supporters. Share only this link for accurate updates.',
+      'The official digital presence for our party branch. News, events, and trusted updates for members and supporters. Share only this official campaign link for accurate information.',
   },
   {
     id: 'by-election',
@@ -48,7 +48,7 @@ export const CAMPAIGN_TEMPLATES = [
     campaignType: 'Parliamentary',
     title: 'By-election — our moment to choose',
     description:
-      'A by-election is approaching. This is the official campaign page with verified information about the candidate, message, and how to stay informed until election day.',
+      'A by-election is approaching. This is the official campaign page with the candidate, campaign message, and how to stay informed until election day.',
   },
   {
     id: 'referendum',

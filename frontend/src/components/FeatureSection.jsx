@@ -4,23 +4,23 @@ import { QrCode, Link2, Shield, Smartphone } from 'lucide-react';
 const features = [
   {
     icon: Link2,
-    title: 'One official URL',
-    description: 'Every campaign gets a permanent link voters, media, and supporters can trust and return to.',
+    title: 'Official campaign link',
+    description: 'Every campaign page gets one official campaign link voters, media, and supporters can trust and return to.',
   },
   {
     icon: QrCode,
-    title: 'QR for posters',
-    description: 'Download a QR code for flyers, billboards, and rally materials — scan to reach your official page.',
+    title: 'Official campaign QR code',
+    description: 'Download an official campaign QR code for flyers, billboards, and rally materials — scan to open your official page.',
   },
   {
     icon: Shield,
     title: 'Admin authorization',
-    description: 'Admin-authorized pages show an Official Page badge so citizens can tell real campaigns from fakes.',
+    description: 'Admin-authorized pages show an Official Page badge so citizens can tell real campaign pages from impersonations.',
   },
   {
     icon: Smartphone,
-    title: 'WhatsApp-ready',
-    description: 'Share in one tap. Built for how Ghana campaigns reach people — mobile-first.',
+    title: 'Built for Ghana campaigns',
+    description: 'Share your official campaign page in one tap — mobile-first for WhatsApp, posters, and the trail.',
   },
 ];
 
@@ -34,9 +34,9 @@ export default function FeatureSection() {
           viewport={{ once: true }}
           className="mb-14"
         >
-          <h2 className="section-title">A clear public home for your campaign</h2>
+          <h2 className="section-title">A clear public home for your campaign page</h2>
           <p className="section-subtitle">
-            One official page for your candidate, party, message, and links — simple enough for every voter to find.
+            One official campaign page for your candidate, party, message, and links — simple enough for every voter to find.
           </p>
         </motion.div>
 

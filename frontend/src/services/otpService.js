@@ -6,10 +6,15 @@ function isOtpServiceUnavailable(message = '', code = '') {
   const msg = message.toLowerCase();
   return (
     code === 'OTP_ADMIN_MISSING' ||
+    code === 'NETWORK_ERROR' ||
     msg.includes('otp service') ||
     msg.includes('otp_admin') ||
     msg.includes('starting up') ||
-    msg.includes('unavailable')
+    msg.includes('unavailable') ||
+    msg.includes('took too long') ||
+    msg.includes('could not reach') ||
+    msg.includes('network error') ||
+    msg.includes('timeout')
   );
 }
 

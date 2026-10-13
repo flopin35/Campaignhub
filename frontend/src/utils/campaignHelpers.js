@@ -97,10 +97,10 @@ export function getStatusLabel(status) {
     pending_payment_review: 'Pending Approval',
     approved: 'Approved',
     active: 'Active',
-    expired: 'Expired',
+    expired: 'Archived',
     rejected: 'Rejected',
     pending: 'Pending',
-    disabled: 'Disabled',
+    disabled: 'Hidden',
   };
   return labels[status] || status;
 }
@@ -113,8 +113,8 @@ export function getStatusBadgeClass(status) {
     approved: 'badge-pending',
     pending: 'badge-pending',
     expired: 'badge-expired',
-    rejected: 'badge-expired',
-    disabled: 'badge-expired',
+    rejected: 'badge-rejected',
+    disabled: 'badge-hidden',
   };
   return map[status] || 'badge-pending';
 }
@@ -151,12 +151,23 @@ export function normalizeSocialLinks(links = {}) {
     facebook: normalizeExternalUrl(links.facebook),
     twitter: normalizeExternalUrl(links.twitter),
     instagram: normalizeExternalUrl(links.instagram),
+    tiktok: normalizeExternalUrl(links.tiktok),
+    youtube: normalizeExternalUrl(links.youtube),
     website: normalizeExternalUrl(links.website),
   };
 }
 
 /** Office level for political campaigns (stored in campaignType) */
-export const OFFICE_LEVELS = ['Presidential', 'Parliamentary', 'MMDCE', 'Party', 'Referendum'];
+export const OFFICE_LEVELS = [
+  'Presidential',
+  'Parliamentary',
+  'Parliamentary primary',
+  'MMDCE',
+  'Assembly member',
+  'Unit committee',
+  'Party executive',
+  'Referendum / advocacy',
+];
 
 /** @deprecated use OFFICE_LEVELS — kept for legacy Firestore docs */
 export const CAMPAIGN_TYPES = OFFICE_LEVELS;

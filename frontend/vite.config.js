@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { createOtpDevMiddleware } from './api/_lib/otpDevMiddleware.js';
+import { createDevApiMiddleware } from './api/_lib/devMiddleware.js';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -14,9 +14,9 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       {
-        name: 'campaignhub-otp-api-dev',
+        name: 'campaignhub-dev-api',
         configureServer(server) {
-          server.middlewares.use(createOtpDevMiddleware());
+          server.middlewares.use(createDevApiMiddleware());
         },
       },
     ],
@@ -28,6 +28,9 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
       },
+    },
+    build: {
+      chunkSizeWarningLimit: 900,
     },
   };
 });

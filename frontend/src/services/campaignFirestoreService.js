@@ -13,11 +13,12 @@ import {
   Timestamp,
   writeBatch,
   increment,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { generateSlug, appendSlugSuffix } from '../utils/slugGenerator';
 import { normalizeCampaign, addDays, toDate, sortCampaignsForDisplay, normalizeSocialLinks } from '../utils/campaignHelpers';
-import { uploadBanner, uploadGalleryImages, uploadLogo } from './storageService';
+import { uploadBanner, uploadLogo } from './storageService';
 import { auth, isAdmin } from '../firebase/auth';
 import { isUserVerified, getUserProfile } from './authService';
 
@@ -60,129 +61,247 @@ export async function expireOverdueCampaigns(campaigns) {
   return count;
 }
 
+const DAY_MS = 86400000;
+const TRIAL_MS = 7 * DAY_MS - 60_000;
+const GRACE_MS = 3 * DAY_MS;
+
+/** Fields an owner may edit at any time (mirrors ownerCanEditContent() in firestore.rules). */
+export const OWNER_EDITABLE_FIELDS = [
+  'title',
+  'description',
+  'bannerImage',
+  'bannerUrl',
+  'logoUrl',
+  'logoImage',
+  'galleryImages',
+  'socialLinks',
+  'contactEmail',
+  'contactPhone',
+  'campaignType',
+  'category',
+  'candidateName',
+  'party',
+  'region',
+  'constituency',
+  'slogan',
+  'priorities',
+  'electionDate',
+  'voteTarget',
+  'registeredVoters',
+  'themeColor',
+  'donation',
+  'poll',
+  'sections',
+  'electionCandidates',
+  'ownerName',
+];
+
+function cleanPriorities(list = []) {
+  return (Array.isArray(list) ? list : [])
+    .map((p) => ({ title: String(p?.title || '').trim().slice(0, 80), text: String(p?.text || '').trim().slice(0, 400) }))
+    .filter((p) => p.title)
+    .slice(0, 6);
+}
+
 /**
- * Create campaign — free packages go live immediately; paid await payment proof.
+ * Create a campaign page.
+ *  - useTrial → live immediately with a 7-day Pro trial (one per account, enforced by rules)
+ *  - otherwise → saved unpublished until the owner subscribes
  */
-export async function createCampaign({ form, bannerFile, logoFile, galleryFiles, ownerId, ownerName, ownerEmail, pkg, onUploadProgress }) {
-  if (!bannerFile) throw new Error('Banner image is required');
-  if (!pkg) throw new Error('Please select a package');
-  if (!ownerId) throw new Error('You must be signed in to create a campaign');
+export async function createCampaign({ form, bannerFile, logoFile, owner, useTrial, onUploadProgress }) {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('You must be signed in to create a campaign');
+  if (!currentUser || !owner?.uid || currentUser.uid !== owner.uid) {
+    throw new Error('You must be signed in to create a campaign page.');
+  }
   const profile = await getUserProfile(currentUser.uid);
   if (!isUserVerified(currentUser, profile)) {
-    const usesPassword = currentUser.providerData?.some((p) => p.providerId === 'password');
-    if (usesPassword && !currentUser.emailVerified) {
-      throw new Error('Verify your email before launching a campaign page.');
-    }
-    throw new Error('Your account must be verified before launching a campaign page.');
+    throw new Error('Verify your email before launching a campaign page.');
   }
   await currentUser.getIdToken(true);
 
-  let bannerImage;
+  let bannerImage = '';
   let logoUrl = '';
-  let galleryImages = [];
   try {
-    onUploadProgress?.(5, 'Validating images…');
-
-    bannerImage = await uploadBanner(bannerFile, (pct) => {
-      onUploadProgress?.(Math.round(pct * 0.45), 'Uploading banner…');
-    }, { skipCooldown: true });
-
+    if (bannerFile) {
+      onUploadProgress?.(5, 'Uploading banner…');
+      bannerImage = await uploadBanner(bannerFile, (pct) => onUploadProgress?.(5 + Math.round(pct * 0.6), 'Uploading banner…'), { skipCooldown: true });
+    }
     if (logoFile) {
-      logoUrl = await uploadLogo(logoFile, (pct) => {
-        onUploadProgress?.(45 + Math.round(pct * 0.15), 'Uploading logo…');
-      }, { skipCooldown: true });
+      logoUrl = await uploadLogo(logoFile, (pct) => onUploadProgress?.(65 + Math.round(pct * 0.25), 'Uploading logo…'), { skipCooldown: true });
     }
-
-    if (galleryFiles?.length) {
-      galleryImages = await uploadGalleryImages(galleryFiles, (pct) => {
-        onUploadProgress?.(60 + Math.round(pct * 0.35), 'Uploading gallery…');
-      }, { skipCooldown: true });
-    }
-
-    onUploadProgress?.(98, 'Saving campaign…');
   } catch (err) {
     const code = err.code || '';
-    const msg = err.message || '';
-    if (code === 'storage/unauthorized' || code === 'storage/unauthenticated' || msg.includes('signed in')) {
+    if (code === 'storage/unauthorized' || code === 'storage/unauthenticated') {
       throw new Error('Image upload failed — please sign in again and retry.');
     }
     throw err;
   }
+  onUploadProgress?.(94, 'Saving campaign…');
 
-  const slug = resolveUniqueSlug(form.title);
-  const isFree = pkg.price === 0 || pkg.id === 'free';
-  const start = isFree ? new Date() : null;
-  const end = isFree ? addDays(start, pkg.durationDays || 14) : null;
+  const now = Date.now();
+  const ref = doc(collection(db, CAMPAIGNS));
+  const title = (form.title || form.candidateName || 'Campaign').trim();
+  const slug = resolveUniqueSlug(title);
 
-  const socialLinks = normalizeSocialLinks({
-    facebook: form.socialFacebook,
-    twitter: form.socialTwitter,
-    instagram: form.socialInstagram,
-    website: form.socialWebsite,
-  });
-
-  const campaignData = {
-    title: form.title,
+  const base = {
+    title,
     slug,
-    description: form.description,
-    category: form.category || 'General',
-    campaignType: form.campaignType || 'Awareness',
+    description: (form.description || '').trim(),
+    candidateName: (form.candidateName || owner.name || '').trim(),
+    party: (form.party || '').trim(),
+    campaignType: form.campaignType || 'Parliamentary',
+    category: 'Politics',
+    region: form.region || '',
+    constituency: (form.constituency || '').trim(),
+    slogan: (form.slogan || '').trim(),
+    electionDate: form.electionDate || '',
+    voteTarget: Number(form.voteTarget) || 0,
+    registeredVoters: Number(form.registeredVoters) || 0,
+    priorities: cleanPriorities(form.priorities),
+    themeColor: form.themeColor || '#0f2747',
     bannerImage,
     bannerUrl: bannerImage,
     logoUrl,
     logoImage: logoUrl,
-    galleryImages,
-    socialLinks,
-    ownerId,
-    ownerName,
-    ownerEmail: ownerEmail || form.contactEmail || '',
-    contactEmail: form.contactEmail || ownerEmail || '',
+    galleryImages: [],
+    socialLinks: normalizeSocialLinks(form.socialLinks || {}),
+    contactEmail: form.contactEmail || owner.email || '',
     contactPhone: form.contactPhone || '',
-    packageType: pkg.id,
-    packageName: pkg.name,
-    packagePrice: pkg.price,
-    priorityLevel: pkg.priorityLevel,
-    featured: pkg.featured || false,
-    spotlight: pkg.spotlight || false,
-    packageFeatured: pkg.featured || false,
-    packageSpotlight: pkg.spotlight || false,
+    sections: { volunteer: true, donate: false, events: true, poll: false },
+    ownerId: owner.uid,
+    ownerName: owner.name || '',
+    ownerEmail: owner.email || '',
+    billingVersion: 2,
     verified: false,
     paymentVerified: false,
+    featured: false,
+    spotlight: false,
+    priorityLevel: 1,
     views: 0,
     shares: 0,
     clicks: 0,
-    durationDays: pkg.durationDays,
-    duration: pkg.durationDays,
-    status: isFree ? 'active' : 'payment_pending',
-    startDate: isFree ? Timestamp.fromDate(start) : null,
-    endDate: isFree ? Timestamp.fromDate(end) : null,
-    expiresAt: isFree ? Timestamp.fromDate(end) : null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
+  const batch = writeBatch(db);
+  if (useTrial) {
+    const trialEndsAt = new Date(now + TRIAL_MS);
+    const endDate = new Date(now + TRIAL_MS + GRACE_MS);
+    batch.set(ref, {
+      ...base,
+      packageType: 'trial',
+      packageName: 'Free trial',
+      packagePrice: 0,
+      status: 'active',
+      startDate: Timestamp.fromDate(new Date(now)),
+      trialEndsAt: Timestamp.fromDate(trialEndsAt),
+      endDate: Timestamp.fromDate(endDate),
+      expiresAt: Timestamp.fromDate(endDate),
+      durationDays: 10,
+    });
+    batch.set(doc(db, 'users', owner.uid), {
+      trialCampaignId: ref.id,
+      trialStartedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } else {
+    batch.set(ref, {
+      ...base,
+      packageType: 'pro',
+      packageName: 'CampaignHub Pro',
+      packagePrice: 0,
+      status: 'payment_pending',
+      startDate: null,
+      endDate: null,
+      expiresAt: null,
+      durationDays: 0,
+    });
+  }
+
   try {
-    const docRef = await addDoc(collection(db, CAMPAIGNS), campaignData);
-    onUploadProgress?.(100, 'Campaign saved');
-
-    try {
-      await updateDoc(doc(db, 'users', ownerId), {
-        campaignsCreated: increment(1),
-        updatedAt: serverTimestamp(),
-      });
-    } catch {
-      /* profile counter is optional */
-    }
-
-    return { id: docRef.id, ...campaignData, slug };
+    await batch.commit();
   } catch (err) {
     if (err.code === 'permission-denied') {
-      throw new Error('Permission denied — sign in again or contact support.');
+      throw new Error(useTrial
+        ? 'Your free trial has already been used on this account. Create the page and subscribe to publish it.'
+        : 'Permission denied — sign in again or contact support.');
     }
     throw err;
   }
+  onUploadProgress?.(100, 'Done');
+  return { id: ref.id, slug, ...base, packageType: useTrial ? 'trial' : 'pro' };
+}
+
+/** Start the account's one free trial on an existing (legacy or unpaid) campaign page. */
+export async function startTrialForCampaign(campaign, uid) {
+  if (!campaign?.id || !uid) throw new Error('Missing campaign');
+  const now = Date.now();
+  const trialEndsAt = new Date(now + TRIAL_MS);
+  const endDate = new Date(now + TRIAL_MS + GRACE_MS);
+  const batch = writeBatch(db);
+  batch.update(doc(db, CAMPAIGNS, campaign.id), {
+    packageType: 'trial',
+    packageName: 'Free trial',
+    status: 'active',
+    disabled: false,
+    startDate: Timestamp.fromDate(new Date(now)),
+    trialEndsAt: Timestamp.fromDate(trialEndsAt),
+    endDate: Timestamp.fromDate(endDate),
+    expiresAt: Timestamp.fromDate(endDate),
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(db, 'users', uid), {
+    trialCampaignId: campaign.id,
+    trialStartedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (err.code === 'permission-denied') {
+      throw new Error('Your account has already used its free trial. Choose a plan to continue.');
+    }
+    throw err;
+  }
+}
+
+/** Owner edits to page content / campaign settings (whitelisted fields only). */
+export async function updateCampaignContent(campaignId, patch) {
+  const clean = {};
+  Object.entries(patch || {}).forEach(([k, v]) => {
+    if (OWNER_EDITABLE_FIELDS.includes(k) && v !== undefined) clean[k] = v;
+  });
+  if (clean.priorities) clean.priorities = cleanPriorities(clean.priorities);
+  if (clean.socialLinks) clean.socialLinks = normalizeSocialLinks(clean.socialLinks);
+  if ('voteTarget' in clean) clean.voteTarget = Number(clean.voteTarget) || 0;
+  if ('registeredVoters' in clean) clean.registeredVoters = Number(clean.registeredVoters) || 0;
+  if (clean.bannerImage !== undefined) clean.bannerUrl = clean.bannerImage;
+  if (clean.logoUrl !== undefined) clean.logoImage = clean.logoUrl;
+  clean.updatedAt = serverTimestamp();
+  try {
+    await updateDoc(doc(db, CAMPAIGNS, campaignId), clean);
+  } catch (err) {
+    if (err.code === 'permission-denied') throw new Error('You can only edit your own campaign page.');
+    throw err;
+  }
+}
+
+export function subscribeCampaign(campaignId, onData, onError) {
+  return onSnapshot(
+    doc(db, CAMPAIGNS, campaignId),
+    (snap) => onData(snap.exists() ? normalizeCampaign(snap) : null),
+    (err) => onError?.(err),
+  );
+}
+
+export function subscribeMyCampaigns(uid, onData, onError) {
+  const q = query(collection(db, CAMPAIGNS), where('ownerId', '==', uid), orderBy('createdAt', 'desc'));
+  return onSnapshot(
+    q,
+    (snap) => onData(snap.docs.map(normalizeCampaign)),
+    (err) => onError?.(err),
+  );
 }
 
 /**

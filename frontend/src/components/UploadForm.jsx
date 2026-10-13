@@ -149,8 +149,8 @@ export default function UploadForm({ onComplete, defaultEmail = '', launching = 
   return (
     <motion.form initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} onSubmit={handleSubmit} className="glass-card space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-white mb-1">Campaign Page Details</h2>
-        <p className="text-sm text-gray-500">Pick a political template or start blank — your official page in minutes.</p>
+        <h2 className="text-xl font-bold text-white mb-1">Official Campaign Page Details</h2>
+        <p className="text-sm text-gray-500">Pick a political template or start blank — present your official campaign page to the public.</p>
       </div>
 
       <div>
@@ -262,7 +262,7 @@ export default function UploadForm({ onComplete, defaultEmail = '', launching = 
       </div>
 
       <button type="submit" disabled={launching} className="btn-primary w-full py-3.5 text-base disabled:opacity-50">
-        {launching ? 'Publishing…' : 'Publish Campaign Page →'}
+        {launching ? 'Launching…' : 'Launch Campaign Page →'}
       </button>
     </motion.form>
   );

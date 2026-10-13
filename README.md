@@ -1,19 +1,28 @@
 # CampaignHub
 
-Launch political, business, and awareness campaigns in minutes. Upload banners, pay via mobile money, get approved, and share with QR codes and live analytics.
+The campaign operating system for Ghanaian candidates — voter CRM, field team, election-day results, ads tracking, messaging and an AI speechwriter, with Paystack / Flutterwave subscriptions.
 
 **Repository:** [github.com/flopin35/Campaignhub](https://github.com/flopin35/Campaignhub)
 
-## MVP Features
+## CampaignHub Pro — features
 
-- **Auth** — Email/password + Google sign-in (Firebase Auth)
-- **Campaign upload** — Banner, logo, gallery, social links, package selection
-- **Payments** — MoMo to Cynthia Okyere (`0509002402`) with auto-generated refs (`CH-XXXXXX`)
-- **Admin approval** — Verify payment, activate, reject, extend campaigns
-- **Public pages** — `/campaign/:slug` with QR, share buttons, view counter
-- **Analytics** — Views, shares, clicks (Firestore)
-- **AI helper** — Upload suggestions + floating chat (Gemini / fallback)
-- **Responsive UI** — Dark luxury design, mobile bottom nav
+One subscription per campaign page: **₵120/month** or **₵1,200/year** (7-day free trial on the first page).
+
+- **Voter CRM** — supporters by region, constituency & polling station; strong / leaning / undecided / opposed; CSV import & export
+- **Path to victory** — win number, projected votes, persuadable voters by station
+- **Field team** — private canvassing links (no app, no login), volunteer approvals, leaderboard
+- **Election day** — polling stations, agent result links, live collation, turnout, missing stations, CSV export
+- **Messages** — audience builder + personalised WhatsApp queue, bulk-SMS CSV, email BCC, templates, AI rewrite
+- **Ads & reach** — tracked links + printable QR per ad, visits, sign-ups, cost per supporter; Spotlight placement
+- **Events** — public RSVPs, WhatsApp invites, gate check-in counter
+- **Fundraising** — MoMo donations to the campaign's own number, confirmations, goals, donor leaderboard
+- **Insights** — 30/90-day traffic, sources, conversion, issue poll by region
+- **AI Studio** — speeches, ad copy, posts, SMS, statements in English, Twi, Fante, Ga, Ewe, Hausa, Dagbani, Pidgin
+- **Public campaign page** — candidate-branded, mobile-first, join / volunteer / donate / poll / events / share
+- **Billing** — Paystack + Flutterwave (MoMo & cards), webhooks, receipts, optional card auto-renew
+- **Light & dark themes** — navy + gold design system
+
+See **[docs/BILLING_SETUP.md](docs/BILLING_SETUP.md)** to connect Paystack/Flutterwave and go live.
 
 ## Tech Stack
 
@@ -89,22 +98,16 @@ AI: **http://localhost:8000**
 
 Set `GEMINI_API_KEY` in `ai-service/.env` for live AI responses.
 
-## Packages (GHS)
+## Plans
 
-| Package | Price | Duration |
-|---------|-------|----------|
-| Basic Ad | 100 | 7 days |
-| Boost Ad | 250 | 14 days |
-| Premium Campaign | 500 | 30 days |
-| Elite Campaign | 600 | 45 days |
+| Plan | Price | Notes |
+|------|-------|-------|
+| Free trial | ₵0 · 7 days | One per account; page goes live immediately |
+| Pro monthly | ₵120 / 30 days | MoMo or card (Paystack / Flutterwave) |
+| Pro yearly | ₵1,200 / 365 days | 2 months free |
+| Spotlight | ₵20–₵350 | One-time homepage placement (3–48 h) |
 
-## Campaign Flow
-
-```
-Upload details → Select package → MoMo payment → Upload proof → Admin approves → Live
-```
-
-Statuses: `payment_pending` → `pending_review` → `active` → `expired`
+Prices: `frontend/api/_lib/billingCatalog.js` (single source of truth for server and UI).
 
 ## Admin Access
 

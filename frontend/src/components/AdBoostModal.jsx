@@ -259,7 +259,7 @@ export default function AdBoostModal({
             <div className="overflow-y-auto flex-1 px-4 sm:px-5 py-4 sm:py-5">
               {!user ? (
                 <div className="text-center py-8">
-                  <p className="text-sm text-gray-400 mb-4">Sign in to boost your campaign.</p>
+                  <p className="text-sm text-gray-400 mb-4">Sign in to spotlight your campaign page in the directory.</p>
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <Link to="/login" className="btn-primary text-sm" onClick={onClose}>Sign in</Link>
                     <Link to="/signup" className="btn-secondary text-sm" onClick={onClose}>Create account</Link>
@@ -274,15 +274,15 @@ export default function AdBoostModal({
                 </div>
               ) : campaigns.length === 0 ? (
                 <div className="text-center py-8 rounded-xl border border-amber-500/20 bg-amber-500/5">
-                  <p className="text-sm text-amber-300 mb-4">Launch a campaign first, then boost it.</p>
-                  <Link to="/upload" className="btn-primary text-sm" onClick={onClose}>Launch Campaign</Link>
+                  <p className="text-sm text-amber-300 mb-4">Launch a campaign page first, then add directory spotlight.</p>
+                  <Link to="/upload" className="btn-primary text-sm" onClick={onClose}>Launch Campaign Page</Link>
                 </div>
               ) : (
                 <>
                   {step === STEPS.pick && campaigns.length > 1 && !presetCampaign && (
                     <div className="mb-4">
                       <label htmlFor="boost-campaign-select" className="text-xs font-medium text-gray-500 mb-1.5 block">
-                        Campaign to boost
+                        Campaign page to spotlight
                       </label>
                       <select
                         id="boost-campaign-select"

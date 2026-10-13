@@ -222,7 +222,7 @@ export default function AIChatWidget({ context = {} }) {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
-                    dashboardMode ? 'Ask about page stats or your campaign message…' : 'Ask for captions, slogans, or copy…'
+                    dashboardMode ? 'Ask about public page activity or your campaign message…' : 'Ask for captions, slogans, or campaign page copy…'
                   }
                   className="input-field text-sm py-2.5 flex-1"
                   disabled={loading}

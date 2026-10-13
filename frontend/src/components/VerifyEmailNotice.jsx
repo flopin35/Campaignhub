@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { Mail, CircleCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { resendVerificationEmail, checkEmailVerificationStatus } from '../services/authService';
 import { resolvePostLoginPath } from '../utils/authVerification';
 import AuthLoading from './AuthLoading';
-import { Mail, CheckCircle2 } from './icons/AppIcons';
+import AuthShell from './AuthShell';
+import { Button } from './ui';
 
 export default function VerifyEmailNotice({ compact = false, autoRedirect = !compact }) {
   const { user, refreshUser, isVerified } = useAuth();
@@ -19,12 +20,10 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
   useEffect(() => {
     if (!autoRedirect || !isVerified) return;
     toast('Email verified! Welcome to CampaignHub.', 'success');
-    const dest = resolvePostLoginPath(true, location.state?.from?.pathname || '/dashboard');
-    navigate(dest, { replace: true });
+    navigate(resolvePostLoginPath(true, location.state?.from?.pathname || '/dashboard'), { replace: true });
   }, [autoRedirect, isVerified, navigate, location.state?.from?.pathname, toast]);
 
-  if (!user) return null;
-  if (isVerified) return null;
+  if (!user || isVerified) return null;
 
   const handleResend = async () => {
     setSending(true);
@@ -43,11 +42,7 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
     try {
       const { verified } = await checkEmailVerificationStatus();
       await refreshUser();
-      if (verified) {
-        toast('Email verified! You now have full access.', 'success');
-      } else {
-        toast('Not verified yet. Click the link in your email, then try again.', 'warning');
-      }
+      toast(verified ? 'Email verified!' : 'Not verified yet. Click the link in your email, then try again.', verified ? 'success' : 'warning');
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -57,121 +52,70 @@ export default function VerifyEmailNotice({ compact = false, autoRedirect = !com
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-        <span className="text-xs text-amber-400">Verify your email</span>
-        <Link to="/verify-email" className="text-xs text-brand-400 hover:underline">
-          Verify now
-        </Link>
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-warning-soft border border-warning/25 rounded-lg text-xs">
+        <span className="text-warning">Verify your email</span>
+        <Link to="/verify-email" className="text-link hover:underline">Verify now</Link>
       </div>
     );
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="card border-amber-500/20 bg-amber-500/5"
-    >
+    <div className="card p-6">
       <div className="flex items-start gap-4">
-        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
-          <Mail className="w-5 h-5 text-amber-400" />
-        </div>
-        <div className="flex-1">
-          <h3 className="font-medium text-white mb-1">Verify your email to continue</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            We sent a secure verification link to{' '}
-            <strong className="text-gray-300">{user.email}</strong>.
-            Click the link to unlock uploads and your campaign pages.
+        <span className="w-11 h-11 rounded-xl bg-warning-soft text-warning flex items-center justify-center shrink-0">
+          <Mail className="w-5 h-5" />
+        </span>
+        <div>
+          <p className="text-[15px] text-ink-2">
+            We sent a verification link to <strong className="text-ink">{user.email}</strong>. Click it to open your campaign dashboard.
           </p>
-
-          <ol className="text-xs text-gray-500 space-y-1 mb-4 list-decimal list-inside">
-            <li>Open the email from CampaignHub / Firebase</li>
+          <ol className="mt-4 space-y-1 list-decimal list-inside text-sm text-ink-2">
+            <li>Open the email (check spam or promotions)</li>
             <li>Click the verification link</li>
-            <li>Return here — we&apos;ll detect it automatically</li>
+            <li>Come back here — we detect it automatically</li>
           </ol>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={sending}
-              className="btn-secondary text-sm py-2 disabled:opacity-50"
-            >
-              {sending ? 'Sending…' : 'Resend verification email'}
-            </button>
-            <button
-              type="button"
-              onClick={handleCheck}
-              disabled={checking}
-              className="btn-primary text-sm py-2 disabled:opacity-50"
-            >
-              {checking ? 'Checking…' : "I've verified my email"}
-            </button>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button onClick={handleCheck} loading={checking}>I&apos;ve verified my email</Button>
+            <Button variant="secondary" onClick={handleResend} loading={sending}>Resend email</Button>
           </div>
-
-          <p className="text-xs text-gray-500 mt-4 flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            Checking verification status automatically every few seconds
+          <p className="mt-4 text-xs text-ink-3 flex items-center gap-1.5">
+            <CircleCheck className="w-3.5 h-3.5 text-success" /> Checking automatically every few seconds
           </p>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
-/** Full-page verify email route */
 export function VerifyEmailPage() {
   const { user, loading, isVerified } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && isVerified) {
-      navigate('/dashboard', { replace: true });
-    }
+    if (!loading && isVerified) navigate('/dashboard', { replace: true });
   }, [loading, isVerified, navigate]);
 
-  if (loading) {
-    return <AuthLoading message="Loading your account…" />;
-  }
-
+  if (loading) return <AuthLoading message="Loading your account…" />;
   if (!user) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <p className="text-gray-400 mb-4">Sign in to verify your email.</p>
-        <Link to="/login" className="btn-primary text-sm">Sign in</Link>
-      </div>
+      <AuthShell title="Verify your email" subtitle="Sign in first to verify your email address.">
+        <Button to="/login" block size="lg">Sign in</Button>
+      </AuthShell>
     );
   }
-
-  if (isVerified) {
-    return <AuthLoading message="Email verified — opening your campaign pages…" />;
-  }
+  if (isVerified) return <AuthLoading message="Email verified — opening your dashboard…" />;
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 relative">
-      <div className="absolute inset-0 bg-hero-glow pointer-events-none" />
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-lg relative"
-      >
-        <div className="text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
-            <Mail className="w-6 h-6 text-amber-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Verify your email</h1>
-          <p className="text-gray-400 text-sm">
-            One quick step before you can launch campaigns
-          </p>
-        </div>
-        <VerifyEmailNotice />
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Wrong account?{' '}
-          <Link to="/login" className="text-brand-400 hover:text-brand-300">
-            Sign in with a different email
-          </Link>
+    <AuthShell
+      title="Verify your email"
+      subtitle="One quick step before you launch your campaign."
+      footer={
+        <p className="text-sm text-ink-3">
+          Wrong account? <Link to="/login" className="text-link hover:underline">Sign in with a different email</Link>
         </p>
-      </motion.div>
-    </div>
+      }
+    >
+      <VerifyEmailNotice />
+    </AuthShell>
   );
 }

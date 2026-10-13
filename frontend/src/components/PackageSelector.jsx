@@ -70,7 +70,7 @@ export default function PackageSelector({ selected, onSelect, loading }) {
           ? 'Uploading & creating…'
           : pending
             ? pending.isFree
-              ? `Launch Free Campaign →`
+              ? `Launch Campaign Page →`
               : `Continue with ${pending.name} →`
             : 'Select a plan to continue'}
       </button>

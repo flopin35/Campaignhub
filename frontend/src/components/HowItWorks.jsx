@@ -7,20 +7,20 @@ const steps = [
   {
     icon: Upload,
     step: '1',
-    title: 'Create your page',
-    description: 'Add your candidate photo, party logo, campaign message, and official links.',
+    title: 'Create your campaign page',
+    description: 'Add your candidate photo, party logo, campaign message, and official campaign links.',
   },
   {
     icon: ShieldCheck,
     step: '2',
     title: 'Request authorization',
-    description: 'Ask admin to authorize your page so voters know it is official — not an impersonation.',
+    description: 'Ask admin to authorize your campaign page so voters know it is an Official Campaign — not an impersonation.',
   },
   {
     icon: Share2,
     step: '3',
-    title: 'Share one trusted link',
-    description: 'Put your URL and QR code on posters, WhatsApp, and radio. One official home for your campaign.',
+    title: 'Share your official campaign',
+    description: 'Put your official campaign link and official campaign QR code on posters, WhatsApp, and radio.',
   },
 ];
 
@@ -34,9 +34,9 @@ export default function HowItWorks() {
           viewport={{ once: true }}
           className="text-center mb-14"
         >
-          <h2 className="section-title">Three steps to your official page</h2>
+          <h2 className="section-title">Three steps to your official campaign page</h2>
           <p className="section-subtitle mx-auto">
-            From candidate details to a trusted public page citizens can find and share.
+            From candidate details to a trusted official campaign page citizens can find and share.
           </p>
         </motion.div>
 

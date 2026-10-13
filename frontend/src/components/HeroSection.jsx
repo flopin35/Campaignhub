@@ -15,7 +15,10 @@ export default function HeroSection({ campaignCount = 0 }) {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-400 mb-4">
               {BRAND.name}
             </p>
-            <p className="text-base sm:text-lg text-gray-300 mb-6 max-w-xl leading-relaxed">
+            <p className="text-base sm:text-lg text-gray-300 mb-2 max-w-xl leading-relaxed">
+              {BRAND.shortTagline}
+            </p>
+            <p className="text-sm text-gray-500 mb-6 max-w-xl leading-relaxed">
               {BRAND.tagline}
             </p>
 

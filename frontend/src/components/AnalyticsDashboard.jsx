@@ -56,7 +56,7 @@ function AdvancedInsights({ campaign, stats, views, shares, engagementRate }) {
         </div>
       </div>
       <p className="text-xs text-gray-500">
-        Page activity breakdown for {campaign?.title} — based on live analytics.
+        Public page activity for {campaign?.title} — how citizens reach your official campaign page.
       </p>
     </div>
   );
@@ -67,8 +67,8 @@ function PremiumAnalyticsUpsell({ campaign }) {
     <PremiumGate
       campaign={campaign}
       feature="analytics"
-      title="Unlock detailed page analytics"
-      description="See where visitors come from, which channels drive traffic, and detailed page activity breakdowns."
+      title="Unlock detailed public page activity"
+      description="See how citizens find your official campaign page — traffic sources, sign-ups, and link activity."
     />
   );
 }
@@ -150,9 +150,9 @@ export default function AnalyticsDashboard({ campaign, stats: externalStats }) {
           <AdvancedInsights campaign={campaign} stats={stats} views={views} shares={outboundShares} engagementRate={engagementRate} />
 
           <div className="glass-card">
-            <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Detailed Stats</h3>
+            <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wide">Public Page Activity</h3>
             <CampaignStats stats={stats} campaign={campaign} />
-            <p className="text-xs text-gray-600 mt-4">Live data from Firebase · updates in real time</p>
+            <p className="text-xs text-gray-600 mt-4">Live public page activity · updates in real time</p>
           </div>
         </>
       ) : (

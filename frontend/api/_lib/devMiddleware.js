@@ -9,6 +9,8 @@ import webhookHandler from '../webhooks/[provider].js';
 import aiStudioHandler from '../ai-studio.js';
 import askAiHandler from '../ask-ai.js';
 import recommendationsHandler from '../recommendations.js';
+import metaHandler from '../meta/[action].js';
+import adminHandler from '../admin/[action].js';
 
 function readRaw(req) {
   return new Promise((resolve, reject) => {
@@ -52,6 +54,10 @@ function resolveRoute(path) {
   if (m) return { handler: billingHandler, query: { action: m[1] } };
   m = path.match(/^\/api\/webhooks\/([\w-]+)$/);
   if (m) return { handler: webhookHandler, query: { provider: m[1] } };
+  m = path.match(/^\/api\/meta\/([\w-]+)$/);
+  if (m) return { handler: metaHandler, query: { action: m[1] } };
+  m = path.match(/^\/api\/admin\/([\w-]+)$/);
+  if (m) return { handler: adminHandler, query: { action: m[1] } };
   return null;
 }
 
@@ -68,7 +74,7 @@ export function createDevApiMiddleware() {
         try {
           body = JSON.parse(raw);
         } catch {
-          body = {};
+          body = Object.fromEntries(new URLSearchParams(raw));
         }
       }
       const query = { ...Object.fromEntries(new URLSearchParams(search)), ...route.query };

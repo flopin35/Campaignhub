@@ -7,6 +7,7 @@
  *
  * One serverless function for all billing actions keeps the Vercel function count low.
  */
+import { loadRuntimeConfig } from '../_lib/runtimeConfig.js';
 import {
   HttpError,
   applyCors,
@@ -18,6 +19,7 @@ import {
   createCheckout,
   verifyWithProvider,
   fulfillPayment,
+  markCheckoutNotPaid,
   cancelAutoRenew,
   publicBillingConfig,
 } from '../_lib/billing.js';
@@ -45,6 +47,7 @@ const FRIENDLY_FAILURES = {
   currency_mismatch: 'Payments must be made in Ghana cedis (GHS).',
   campaign_missing: 'Payment received, but the campaign page was not found. Contact support with your reference.',
   unknown_reference: 'We could not match this payment to a checkout. Contact support with your reference.',
+  provider_mismatch: 'This reference belongs to a different payment provider.',
 };
 
 export default async function handler(req, res) {
@@ -54,7 +57,9 @@ export default async function handler(req, res) {
   const action = getAction(req);
 
   try {
+    await loadRuntimeConfig();
     if (action === 'config') {
+      res.setHeader('Cache-Control', 'no-store');
       return sendJson(res, 200, { success: true, data: publicBillingConfig() });
     }
 
@@ -92,11 +97,8 @@ export default async function handler(req, res) {
 
       const payment = await verifyWithProvider({ provider, reference, transactionId });
       if (!payment.paid) {
-        if (reference) {
-          await admin.db.collection('billing_transactions').doc(reference).set({
-            status: payment.status === 'abandoned' ? 'abandoned' : 'pending',
-            lastCheckedAt: new Date(),
-          }, { merge: true }).catch(() => {});
+        if (reference && payment.status !== 'unknown' && payment.status !== 'mismatch') {
+          await markCheckoutNotPaid(admin, { provider, reference, status: payment.status }).catch(() => {});
         }
         return sendJson(res, 200, {
           success: true,
@@ -140,12 +142,14 @@ export default async function handler(req, res) {
 
     throw new HttpError(404, 'Unknown billing action');
   } catch (err) {
-    const status = err instanceof HttpError ? err.status : 500;
+    const known = err instanceof HttpError;
+    const status = known ? err.status : 500;
     if (status >= 500) console.error('[billing]', action, err);
     return sendJson(res, status, {
       success: false,
-      message: err.message || 'Billing error',
-      code: err.code,
+      // Internal errors stay in the server log; customers get a safe message.
+      message: known ? err.message : 'Something went wrong on our side. Please try again in a minute.',
+      code: known ? err.code : 'SERVER_ERROR',
     });
   }
 }

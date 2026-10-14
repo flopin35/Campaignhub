@@ -27,7 +27,7 @@ export function getBillingState(campaign, now = Date.now()) {
   const sub = campaign.subscription || null;
   const periodEnd = toMs(sub?.currentPeriodEnd);
   const isTrialPkg = campaign.packageType === 'trial';
-  const trialEnd = isTrialPkg ? toMs(campaign.trialEndsAt || campaign.endDate) : 0;
+  const trialEnd = isTrialPkg ? toMs(campaign.trialEndsAt) : 0;
   const publicUntil = toMs(campaign.endDate);
   const legacyEnd = toMs(campaign.premiumFeatures?.['campaign-crm']?.expiresAt);
 
@@ -95,9 +95,11 @@ export function isPro(campaign) {
   return getBillingState(campaign).isPro;
 }
 
-/** Whether this account can still start its one free trial. */
-export function canStartTrial(userProfile) {
-  return !userProfile?.trialCampaignId;
+/** Whether this account can still start its one free trial (and, if given, on this page). */
+export function canStartTrial(userProfile, campaign) {
+  if (userProfile?.trialCampaignId) return false;
+  if (campaign && (campaign.disabled || ['suspended', 'rejected', 'deleted', 'disabled'].includes(campaign.status))) return false;
+  return true;
 }
 
 export function describeBilling(b) {

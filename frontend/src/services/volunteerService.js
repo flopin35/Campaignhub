@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { createNotification } from './notificationService';
+import { normalizePhone, isValidPhone } from '../utils/format';
 
 const VOLUNTEERS = 'volunteers';
 
@@ -43,16 +44,18 @@ export async function registerVolunteer({
   skills = [],
   availability = '',
 }) {
+  if (!String(name || '').trim()) throw new Error('Enter your name.');
+  if (!isValidPhone(phone)) throw new Error('Enter a valid phone number (e.g. 024 123 4567).');
   const data = {
     campaignId,
     userId,
-    name: name.trim(),
-    phone: phone.trim(),
-    email: email.trim(),
-    region,
-    constituency,
-    skills,
-    availability,
+    name: String(name).trim().slice(0, 120),
+    phone: normalizePhone(phone),
+    email: String(email || '').trim().slice(0, 160),
+    region: String(region || '').slice(0, 80),
+    constituency: String(constituency || '').slice(0, 120),
+    skills: Array.isArray(skills) ? skills.slice(0, 12) : [],
+    availability: String(availability || '').slice(0, 120),
     status: 'pending',
     tasksCompleted: 0,
     eventsAttended: 0,
@@ -65,7 +68,7 @@ export async function registerVolunteer({
   if (ownerId) {
     await createNotification({
       userId: ownerId,
-      message: `New volunteer application: ${name} for "${campaignTitle}"`,
+      message: `New volunteer application: ${data.name} for "${campaignTitle}"`.slice(0, 300),
       type: 'volunteer_pending',
       campaignId,
     }).catch(() => {});

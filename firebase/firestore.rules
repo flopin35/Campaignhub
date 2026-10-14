@@ -10,8 +10,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function emailVerified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
     function isAdmin() {
-      return signedIn()
+      return emailVerified()
         && request.auth.token.email == 'daakukwaku7@gmail.com';
     }
 
@@ -19,16 +23,21 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    /** Google, email-code (OTP) and verified email/password accounts. */
     function isVerifiedUser() {
-      return signedIn();
+      return emailVerified();
     }
 
     function userDoc(uid) {
       return get(/databases/$(database)/documents/users/$(uid));
     }
 
+    function campaignPath(campaignId) {
+      return /databases/$(database)/documents/campaigns/$(campaignId);
+    }
+
     function campaignData(campaignId) {
-      return get(/databases/$(database)/documents/campaigns/$(campaignId)).data;
+      return get(campaignPath(campaignId)).data;
     }
 
     function isCampaignOwner(campaignId) {
@@ -51,20 +60,40 @@ service cloud.firestore {
       return isCampaignOwner(campaignId) && isProCampaign(campaignId);
     }
 
+    function fieldLink(token) {
+      return get(/databases/$(database)/documents/field_links/$(token)).data;
+    }
+
     function sameCampaign() {
       return request.resource.data.campaignId == resource.data.campaignId;
+    }
+
+    /** Public visitors may only attach records to a live campaign page. */
+    function campaignIsLive(campaignId) {
+      return exists(campaignPath(campaignId))
+        && campaignData(campaignId).status == 'active'
+        && campaignData(campaignId).get('disabled', false) == false;
+    }
+
+    function optStr(d, field, maxLen) {
+      return d.get(field, '') is string && d.get(field, '').size() <= maxLen;
+    }
+
+    function stampedNow(d) {
+      return d.get('createdAt', null) == request.time;
     }
 
     // ------------------------------------------------------------------
     // Campaign helpers
     // ------------------------------------------------------------------
 
+    /** Status alone decides public visibility, so public queries (status == 'active') are provable.
+        Admin takedowns use status 'suspended'; owner hides use 'disabled'; owner deletes use 'deleted'. */
     function isPublicActiveCampaign() {
-      return resource.data.status == 'active'
-        && resource.data.get('disabled', false) == false;
+      return resource.data.status == 'active';
     }
 
-    /** Content an owner may change at any time — never billing, status, badges or ranking. */
+    /** Content an owner may change at any time — never billing, status, badges, slug or ranking. */
     function ownerCanEditContent() {
       return signedIn()
         && resource.data.ownerId == request.auth.uid
@@ -78,31 +107,40 @@ service cloud.firestore {
     }
 
     function trialUnused() {
-      return !('trialCampaignId' in userDoc(request.auth.uid).data);
+      return !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        || !('trialCampaignId' in userDoc(request.auth.uid).data);
     }
 
     function trialClaimedFor(campaignId) {
       return getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('trialCampaignId', '') == campaignId;
     }
 
-    function validTrialWindow() {
+    function trialFieldsValid() {
       return request.resource.data.packageType == 'trial'
         && request.resource.data.status == 'active'
         && request.resource.data.trialEndsAt is timestamp
+        && request.resource.data.trialEndsAt > request.time
         && request.resource.data.trialEndsAt <= request.time + duration.value(169, 'h')
-        && request.resource.data.endDate is timestamp
-        && request.resource.data.endDate <= request.time + duration.value(241, 'h');
+        && request.resource.data.endDate is timestamp;
     }
 
-    /** One free trial per account: the campaign write and users/{uid}.trialCampaignId are set in one batch. */
+    function trialEndDateValid() {
+      return request.resource.data.endDate <= request.time + duration.value(241, 'h');
+    }
+
+    /** One free trial per verified account: the campaign write and users/{uid}.trialCampaignId are set in one batch.
+        Never on a page an admin suspended/rejected or the owner deleted. Keeps legacy hosting time already paid for. */
     function ownerCanStartTrial(campaignId) {
-      return signedIn()
+      return emailVerified()
         && resource.data.ownerId == request.auth.uid
+        && resource.data.status in ['payment_pending', 'pending_review', 'pending', 'expired', 'active']
+        && resource.data.get('disabled', false) == false
         && trialUnused()
         && trialClaimedFor(campaignId)
-        && validTrialWindow()
+        && trialFieldsValid()
+        && (trialEndDateValid() || request.resource.data.endDate == resource.data.get('endDate', null))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'packageType', 'packageName', 'status', 'disabled', 'startDate',
+          'packageType', 'packageName', 'status', 'startDate',
           'trialEndsAt', 'endDate', 'expiresAt', 'updatedAt'
         ]);
     }
@@ -118,6 +156,7 @@ service cloud.firestore {
       return isVerifiedUser()
         && resource.data.ownerId == request.auth.uid
         && resource.data.status == 'active'
+        && resource.data.get('disabled', false) == false
         && request.resource.data.status == 'disabled'
         && request.resource.data.disabled == true
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -134,6 +173,16 @@ service cloud.firestore {
           .hasOnly(['status', 'disabled', 'hiddenAt', 'updatedAt']);
     }
 
+    /** "Delete" for owners = archive. The document stays so its id (and the voter data linked to it)
+        can never be re-claimed by someone else creating a campaign with the same id. */
+    function ownerCanArchiveCampaign() {
+      return signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.status == 'deleted'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'disabled', 'deletedAt', 'hiddenAt', 'updatedAt']);
+    }
+
     function ownerCanRecordExpiryWarning() {
       return isVerifiedUser()
         && resource.data.ownerId == request.auth.uid
@@ -141,18 +190,42 @@ service cloud.firestore {
           .hasOnly(['expiryWarningSentAt', 'updatedAt']);
     }
 
+    function bumpedByOne(field) {
+      return request.resource.data.get(field, 0) == resource.data.get(field, 0)
+        || request.resource.data.get(field, 0) == resource.data.get(field, 0) + 1;
+    }
+
+    /** Anonymous page-view / share / click counters: +1 at a time only. */
     function onlyAnalyticsFieldsChanged() {
       return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['views', 'shares', 'clicks', 'followerCount', 'commentCount', 'updatedAt']);
+          .hasOnly(['views', 'shares', 'clicks', 'updatedAt'])
+        && bumpedByOne('views')
+        && bumpedByOne('shares')
+        && bumpedByOne('clicks')
+        && request.resource.data.get('updatedAt', null) == request.time;
     }
 
     function isValidAnalyticsDoc(id) {
       return request.resource.data.campaignId == id
-        && request.resource.data.keys().hasAll(['campaignId', 'updatedAt']);
+        && request.resource.data.keys().hasAll(['campaignId', 'updatedAt'])
+        && exists(campaignPath(id));
+    }
+
+    /** Visitors may only add to the known counters — never remove or rename fields. */
+    function analyticsCountersOnly() {
+      return request.resource.data.keys().hasAll(resource.data.keys())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'campaignId', 'updatedAt', 'totalViews', 'qrScans', 'directVisits', 'adVisitsTotal',
+          'whatsappVisits', 'facebookVisits', 'twitterVisits', 'telegramVisits', 'linkedinVisits',
+          'instagramVisits', 'tiktokVisits', 'whatsappShares', 'facebookShares', 'twitterShares',
+          'telegramShares', 'linkedinShares', 'instagramShares', 'tiktokShares', 'linkCopies',
+          'ctaClicks', 'leadSignups', 'daily', 'dailySignups', 'adVisits', 'adSignups'
+        ]);
     }
 
     function isLikeOnly() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        && request.resource.data.get('likes', 0) == resource.data.get('likes', 0) + 1;
     }
 
     // ------------------------------------------------------------------
@@ -189,6 +262,9 @@ service cloud.firestore {
 
       allow create: if isVerifiedUser()
         && request.resource.data.ownerId == request.auth.uid
+        // no back-dating to the top of the directory, no re-using an old campaign's id
+        && request.resource.data.createdAt == request.time
+        && !exists(/databases/$(database)/documents/analytics/$(campaignId))
         && request.resource.data.views == 0
         && request.resource.data.shares == 0
         && request.resource.data.clicks == 0
@@ -199,11 +275,13 @@ service cloud.firestore {
         && request.resource.data.get('spotlight', false) == false
         && request.resource.data.get('boostActive', false) == false
         && request.resource.data.get('paymentVerified', false) == false
+        && request.resource.data.get('disabled', false) == false
         && request.resource.data.get('priorityLevel', 0) <= 1
         && (
           (request.resource.data.status == 'payment_pending'
             && request.resource.data.packageType == 'pro')
-          || (validTrialWindow()
+          || (trialFieldsValid()
+            && trialEndDateValid()
             && trialUnused()
             && trialClaimedFor(campaignId))
         );
@@ -213,19 +291,22 @@ service cloud.firestore {
         || ownerCanStartTrial(campaignId)
         || ownerCanHideCampaign()
         || ownerCanRelaunchCampaign()
+        || ownerCanArchiveCampaign()
         || ownerCanRecordExpiryWarning()
         || ownerCanRequestExtension()
         || (isPublicActiveCampaign() && onlyAnalyticsFieldsChanged());
 
-      allow delete: if isAdmin()
-        || (signedIn() && resource.data.ownerId == request.auth.uid);
+      // Owners archive (status 'deleted'); only an admin can remove the document.
+      allow delete: if isAdmin();
     }
 
     match /analytics/{campaignId} {
-      allow read: if true;
-      allow create: if isValidAnalyticsDoc(campaignId);
-      allow update: if resource.data.campaignId == campaignId
-        && request.resource.data.campaignId == campaignId;
+      allow read: if isAdmin() || isCampaignOwner(campaignId);
+      allow create: if isAdmin() || isValidAnalyticsDoc(campaignId);
+      allow update: if isAdmin()
+        || (resource.data.campaignId == campaignId
+            && request.resource.data.campaignId == campaignId
+            && analyticsCountersOnly());
     }
 
     // ------------------------------------------------------------------
@@ -238,7 +319,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Private Paystack codes per campaign (customer / plan / subscription / email token).
+    match /billing_accounts/{campaignId} {
+      allow read: if isAdmin() || isCampaignOwner(campaignId);
+      allow write: if false;
+    }
+
     match /ai_usage/{docId} {
+      allow read, write: if false;
+    }
+
+    // Meta (Facebook/Instagram) ad-account connections: encrypted tokens and caches — server only.
+    match /meta_connections/{campaignId} {
+      allow read, write: if false;
+    }
+    match /meta_cache/{docId} {
+      allow read, write: if false;
+    }
+    match /meta_deletions/{docId} {
+      allow read, write: if false;
+    }
+
+    // Keys and setup state saved from Admin → Setup — server only.
+    match /config/{docId} {
       allow read, write: if false;
     }
 
@@ -273,40 +376,37 @@ service cloud.firestore {
       allow read, update: if isAdmin();
     }
 
-    // Legacy manual MoMo payments (screenshot proofs) — kept for existing records
-    function ownerPaymentProofUpdate() {
-      return signedIn()
-        && resource.data.userId == request.auth.uid
-        && resource.data.paymentStatus == 'pending'
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.paymentStatus == 'pending_review'
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['screenshotUrl', 'paymentStatus', 'proofSubmittedAt']);
-    }
-
+    // Legacy manual MoMo payments (screenshot proofs) — read-only history now; new payments go through Paystack/Flutterwave.
     match /payments/{paymentId} {
       allow read: if isAdmin()
         || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.paymentStatus == 'pending'
-        && request.resource.data.campaignId is string
-        && request.resource.data.paymentReference is string
-        && request.resource.data.amount is number
-        && request.resource.data.amount > 0
-        && request.resource.data.packageName is string
-        && request.resource.data.packageId is string;
-      allow update: if isAdmin() || ownerPaymentProofUpdate();
-      allow delete: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isAdmin();
+    }
+
+    /** Sign-up / volunteer / donation alerts a visitor's browser sends to the campaign owner. */
+    function visitorAlertForOwner() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['userId', 'message', 'type', 'campaignId', 'read', 'createdAt'])
+        && d.type in ['new_supporter', 'volunteer_pending', 'donation_pending']
+        && d.campaignId is string
+        && d.read == false
+        && d.message is string
+        && d.message.size() <= 300
+        && d.createdAt == request.time
+        && campaignData(d.campaignId).ownerId == d.userId;
     }
 
     match /notifications/{notificationId} {
       allow read: if signedIn()
         && resource.data.userId == request.auth.uid;
       allow create: if isAdmin()
-        || (signedIn() && request.resource.data.userId == request.auth.uid);
+        || (signedIn() && request.resource.data.userId == request.auth.uid)
+        || visitorAlertForOwner();
+      // Recipients can only mark as read — never re-address or rewrite a notification.
       allow update: if signedIn()
-        && resource.data.userId == request.auth.uid;
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
       allow delete: if isAdmin();
     }
 
@@ -314,55 +414,146 @@ service cloud.firestore {
     // Campaign workspace data (private to the campaign owner)
     // ------------------------------------------------------------------
 
+    function validSupporterBasics() {
+      let d = request.resource.data;
+      return d.campaignId is string
+        && d.name is string
+        && d.name.size() > 0
+        && d.name.size() <= 120
+        && d.phone is string
+        && d.phone.size() >= 9
+        && d.phone.size() <= 20
+        && optStr(d, 'email', 160)
+        && optStr(d, 'notes', 1000)
+        && d.get('supportLevel', 'unknown') in ['strong', 'leaning', 'undecided', 'opposed', 'unknown']
+        && d.get('totalDonated', 0) == 0
+        && d.get('donationCount', 0) == 0;
+    }
+
+    /** Sign-ups from the public page and canvassers on a field link (no login). */
+    function validPublicSupporter() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'campaignId', 'userId', 'name', 'phone', 'email', 'region', 'constituency',
+          'pollingStation', 'supportLevel', 'interests', 'isVolunteer', 'adCode', 'collectedBy',
+          'fieldToken', 'notes', 'contactCount', 'volunteerStatus', 'totalDonated',
+          'donationCount', 'eventsAttended', 'source', 'tags', 'createdAt', 'updatedAt'
+        ])
+        && stampedNow(d)
+        && (d.get('userId', null) == null || (signedIn() && d.userId == request.auth.uid))
+        && optStr(d, 'region', 80)
+        && optStr(d, 'constituency', 120)
+        && optStr(d, 'pollingStation', 120)
+        && optStr(d, 'adCode', 12)
+        && optStr(d, 'collectedBy', 80)
+        && d.get('interests', []) is list
+        && d.get('interests', []).size() <= 12
+        && d.get('tags', []).size() == 0
+        && d.get('contactCount', 0) <= 1
+        && d.get('eventsAttended', 0) == 0
+        && d.get('source', 'campaign_page') in ['campaign_page', 'field', 'event', 'qr', 'ad']
+        // canvassers prove themselves with their field-link token; everyone else needs a live page
+        && ((d.get('source', '') == 'field' && validCanvassToken(d))
+            || (d.get('source', '') != 'field' && campaignIsLive(d.campaignId)));
+    }
+
+    function validCanvassToken(d) {
+      let t = d.get('fieldToken', '');
+      return t is string
+        && t.size() >= 20
+        && exists(/databases/$(database)/documents/field_links/$(t))
+        && fieldLink(t).campaignId == d.campaignId
+        && fieldLink(t).mode == 'canvass'
+        && fieldLink(t).get('active', true) == true;
+    }
+
     match /supporters/{supporterId} {
       allow read: if isAdmin() || isCampaignOwner(resource.data.campaignId);
-      // Public sign-ups, field canvassers and owner imports
-      allow create: if request.resource.data.campaignId is string
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 120
-        && request.resource.data.phone is string
-        && request.resource.data.phone.size() >= 9
-        && request.resource.data.phone.size() <= 20;
+      allow create: if validSupporterBasics()
+        && (isCampaignOwner(request.resource.data.campaignId) || validPublicSupporter());
       allow update: if (isAdmin() || isCampaignOwner(resource.data.campaignId)) && sameCampaign();
       allow delete: if isAdmin() || isCampaignOwner(resource.data.campaignId);
     }
 
+    function validDonation() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'campaignId', 'userId', 'amount', 'donorName', 'donorPhone', 'donorEmail', 'region',
+          'constituency', 'anonymous', 'recurring', 'paymentReference', 'paymentStatus',
+          'screenshotUrl', 'createdAt', 'updatedAt'
+        ])
+        && d.campaignId is string
+        && d.amount is number
+        && d.amount >= 5
+        && d.amount <= 1000000
+        && d.donorName is string
+        && d.donorName.size() > 0
+        && d.donorName.size() <= 120
+        && d.donorPhone is string
+        && d.donorPhone.size() <= 20
+        && optStr(d, 'donorEmail', 160)
+        && optStr(d, 'region', 80)
+        && optStr(d, 'constituency', 120)
+        && optStr(d, 'paymentReference', 40)
+        && d.get('screenshotUrl', '') == ''
+        && d.paymentStatus == 'pending'
+        && stampedNow(d);
+    }
+
     match /donations/{donationId} {
       allow read: if isAdmin() || isCampaignOwner(resource.data.campaignId);
-      allow create: if request.resource.data.campaignId is string
-        && request.resource.data.amount is number
-        && request.resource.data.amount >= 5
-        && request.resource.data.donorName is string
-        && request.resource.data.donorPhone is string
-        && request.resource.data.paymentStatus == 'pending';
+      allow create: if validDonation()
+        && (isCampaignOwner(request.resource.data.campaignId) || campaignIsLive(request.resource.data.campaignId));
       allow update: if isAdmin()
-        || isCampaignOwner(resource.data.campaignId)
+        || (isCampaignOwner(resource.data.campaignId) && sameCampaign())
         || (request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['screenshotUrl', 'momoTxnId', 'paymentStatus', 'proofSubmittedAt', 'updatedAt'])
             && resource.data.paymentStatus == 'pending'
-            && request.resource.data.paymentStatus == 'pending_review');
+            && request.resource.data.paymentStatus == 'pending_review'
+            && optStr(request.resource.data, 'momoTxnId', 40));
       allow delete: if isAdmin();
     }
 
     match /volunteers/{volunteerId} {
       allow read: if isAdmin() || isCampaignOwner(resource.data.campaignId);
-      allow create: if request.resource.data.campaignId is string
+      allow create: if request.resource.data.keys().hasOnly([
+          'campaignId', 'userId', 'name', 'phone', 'email', 'region', 'constituency', 'skills',
+          'availability', 'status', 'tasksCompleted', 'eventsAttended', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.campaignId is string
         && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
         && request.resource.data.phone is string
-        && request.resource.data.status == 'pending';
-      allow update: if isAdmin() || isCampaignOwner(resource.data.campaignId);
+        && request.resource.data.phone.size() >= 9
+        && request.resource.data.phone.size() <= 20
+        && optStr(request.resource.data, 'email', 160)
+        && optStr(request.resource.data, 'availability', 120)
+        && request.resource.data.get('skills', []) is list
+        && request.resource.data.get('skills', []).size() <= 12
+        && request.resource.data.status == 'pending'
+        && request.resource.data.get('tasksCompleted', 0) == 0
+        && request.resource.data.get('eventsAttended', 0) == 0
+        && stampedNow(request.resource.data)
+        && campaignIsLive(request.resource.data.campaignId);
+      allow update: if isAdmin() || (isCampaignOwner(resource.data.campaignId) && sameCampaign());
       allow delete: if isAdmin() || isCampaignOwner(resource.data.campaignId);
     }
 
     match /campaign_events/{eventId} {
-      allow read: if true;
+      // Private events (isPublic == false) are visible to the owner only.
+      // The public page queries where('isPublic', '==', true).
+      allow read: if resource.data.isPublic == true
+        || isAdmin()
+        || isCampaignOwner(resource.data.campaignId);
       allow create: if isVerifiedUser()
         && ownsAndPro(request.resource.data.campaignId);
       allow update: if isAdmin()
-        || isCampaignOwner(resource.data.campaignId)
-        || (request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['rsvpCount', 'checkInCount', 'updatedAt']));
+        || (isCampaignOwner(resource.data.campaignId) && sameCampaign())
+        // anyone may RSVP to a public event: +1 only
+        || (resource.data.get('isPublic', false) == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rsvpCount', 'updatedAt'])
+            && request.resource.data.get('rsvpCount', 0) == resource.data.get('rsvpCount', 0) + 1);
       allow delete: if isAdmin() || isCampaignOwner(resource.data.campaignId);
     }
 
@@ -394,10 +585,6 @@ service cloud.firestore {
       allow delete: if isAdmin() || isCampaignOwner(resource.data.campaignId);
     }
 
-    function fieldLink(token) {
-      return get(/databases/$(database)/documents/field_links/$(token)).data;
-    }
-
     function validAgentResult() {
       let t = request.resource.data.token;
       return t is string
@@ -424,6 +611,7 @@ service cloud.firestore {
         && request.resource.data.option is string
         && request.resource.data.option.size() > 0
         && request.resource.data.option.size() <= 80
+        && optStr(request.resource.data, 'region', 80)
         && request.resource.data.keys().hasOnly(['campaignId', 'pollId', 'option', 'region', 'createdAt']);
       allow update: if false;
     }

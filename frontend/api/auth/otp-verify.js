@@ -39,32 +39,34 @@ export default async function handler(req, res) {
 
     const secret = getOtpSecret();
     const ref = admin.db.collection('auth_otp').doc(emailDocId(email));
-    const snap = await ref.get();
 
-    if (!snap.exists) {
-      return json(res, 400, { success: false, message: 'No code found. Request a new one.' });
+    // Check and count every attempt inside one transaction, so parallel guesses are serialised
+    // and the 5-attempt limit really holds.
+    const outcome = await admin.db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      if (!snap.exists) return { status: 400, message: 'No code found. Request a new one.' };
+      const data = snap.data();
+      if (data.expiresAt < Date.now()) {
+        t.delete(ref);
+        return { status: 400, message: 'Code expired. Request a new one.' };
+      }
+      const attempts = data.attempts || 0;
+      if (attempts >= 5) {
+        t.delete(ref);
+        return { status: 429, message: 'Too many attempts. Request a new code.' };
+      }
+      const expected = hashOtp(code, data.salt, secret);
+      if (expected !== data.codeHash) {
+        t.update(ref, { attempts: attempts + 1 });
+        return { status: 400, message: 'Invalid code. Please try again.' };
+      }
+      t.delete(ref);
+      return { status: 200 };
+    });
+
+    if (outcome.status !== 200) {
+      return json(res, outcome.status, { success: false, message: outcome.message });
     }
-
-    const data = snap.data();
-    const now = Date.now();
-
-    if (data.expiresAt < now) {
-      await ref.delete();
-      return json(res, 400, { success: false, message: 'Code expired. Request a new one.' });
-    }
-
-    if ((data.attempts || 0) >= 5) {
-      await ref.delete();
-      return json(res, 429, { success: false, message: 'Too many attempts. Request a new code.' });
-    }
-
-    const expected = hashOtp(code, data.salt, secret);
-    if (expected !== data.codeHash) {
-      await ref.update({ attempts: (data.attempts || 0) + 1 });
-      return json(res, 400, { success: false, message: 'Invalid code. Please try again.' });
-    }
-
-    await ref.delete();
 
     let userRecord;
     try {
@@ -91,7 +93,7 @@ export default async function handler(req, res) {
     console.error('[OTP] verify error:', err.message);
     return json(res, 500, {
       success: false,
-      message: err.message || 'Verification failed. Please try again.',
+      message: 'Verification failed. Please try again.',
     });
   }
 }

@@ -38,9 +38,20 @@ export function CardHeader({ title, subtitle, action, icon: Icon, className }) {
 /* Badge                                                               */
 /* ------------------------------------------------------------------ */
 
+/* Literal class names: Tailwind 3 only keeps @layer component classes it can find written out in the source. */
+const BADGE_TONES = {
+  neutral: 'badge-neutral',
+  success: 'badge-success',
+  warning: 'badge-warning',
+  danger: 'badge-danger',
+  info: 'badge-info',
+  gold: 'badge-gold',
+  navy: 'badge-navy',
+};
+
 export function Badge({ tone = 'neutral', icon: Icon, className, children }) {
   return (
-    <span className={cn('badge', `badge-${tone}`, className)}>
+    <span className={cn('badge', BADGE_TONES[tone] || BADGE_TONES.neutral, className)}>
       {Icon && <Icon className="w-3.5 h-3.5" aria-hidden />}
       {children}
     </span>
@@ -225,21 +236,31 @@ export function Tabs({ value, onChange, tabs }) {
 
 export function Modal({ open, onClose, title, subtitle, children, footer, size = 'md', dismissible = true }) {
   const panelRef = useRef(null);
+  // Parents often pass a new onClose on every render — keep it in a ref so typing in a
+  // field never re-runs this effect (which would steal focus and close the phone keyboard).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
-      if (e.key === 'Escape' && dismissible) onClose?.();
+      if (e.key === 'Escape' && dismissible) onCloseRef.current?.();
     };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    setTimeout(() => panelRef.current?.querySelector('input, select, textarea, button')?.focus?.(), 30);
+    const timer = setTimeout(() => {
+      const panel = panelRef.current;
+      if (!panel || panel.contains(document.activeElement)) return;
+      const field = panel.querySelector('input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
+      (field || panel).focus?.({ preventScroll: true });
+    }, 30);
     return () => {
+      clearTimeout(timer);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose, dismissible]);
+  }, [open, dismissible]);
 
   if (!open) return null;
 
@@ -250,11 +271,12 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
       <div className="absolute inset-0 bg-navy-950/50 backdrop-blur-[2px]" onClick={dismissible ? onClose : undefined} aria-hidden />
       <div
         ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : undefined}
         className={cn(
-          'relative w-full bg-surface border border-line shadow-pop animate-fade-up',
+          'relative w-full bg-surface border border-line shadow-pop animate-fade-up outline-none',
           'rounded-t-2xl sm:rounded-2xl max-h-[92dvh] flex flex-col',
           width,
         )}

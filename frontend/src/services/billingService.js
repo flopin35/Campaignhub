@@ -1,21 +1,33 @@
 import api from './api';
 
 let configCache = null;
+let clockOffsetMs = 0;
+
+/** Current time according to the server (phones with a wrong clock would otherwise fail trial checks). */
+export function serverNow() {
+  return Date.now() + clockOffsetMs;
+}
 
 /** Which payment providers are switched on (from the server's env vars). */
-export async function getBillingConfig() {
-  if (configCache) return configCache;
+export async function getBillingConfig({ fresh = false } = {}) {
+  if (configCache && !fresh) return configCache;
   try {
+    const sentAt = Date.now();
     const res = await api.get('/billing/config');
+    const receivedAt = Date.now();
     configCache = res.data?.data || null;
+    if (configCache?.serverTime && receivedAt - sentAt < 15000) {
+      clockOffsetMs = Number(configCache.serverTime) - Math.round((sentAt + receivedAt) / 2);
+    }
   } catch {
     configCache = null;
   }
+  // Never pretend a provider is on when we could not ask the server — the checkout would only fail later.
   return configCache || {
     currency: 'GHS',
-    providers: { paystack: true, flutterwave: true },
+    providers: { paystack: false, flutterwave: false },
     autoRenew: { monthly: false, yearly: false },
-    offline: true,
+    unavailable: true,
   };
 }
 

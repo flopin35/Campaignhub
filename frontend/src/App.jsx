@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
+import ErrorBoundary from './components/ErrorBoundary';
 import EmailVerificationHandler from './components/EmailVerificationHandler';
 import ProtectedVerifiedRoute from './components/ProtectedVerifiedRoute';
 import GuestRoute from './components/GuestRoute';
@@ -41,9 +42,21 @@ function LegacyDashboardRedirect() {
   return <Navigate to={slug ? `/dashboard?campaign=${slug}` : '/dashboard'} replace />;
 }
 
+/** Every new page starts at the top (dashboard sections, candidate pages, field links). */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
+  const { pathname } = useLocation();
   return (
     <EmailVerificationHandler>
+      <ScrollToTop />
+      <ErrorBoundary resetKey={pathname}>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route element={<PublicLayout />}>
@@ -83,6 +96,7 @@ export default function App() {
           </Route>
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </EmailVerificationHandler>
   );
 }

@@ -13,6 +13,7 @@ import {
   Lock,
   Crown,
   House,
+  LayoutGrid,
 } from 'lucide-react';
 import { Logo } from '../BrandMark';
 import ThemeToggle from './ThemeToggle';
@@ -79,6 +80,15 @@ function CampaignSwitcher({ currentId, onNavigate }) {
         })}
         {!campaigns.length && !loading && <p className="px-3 py-2 text-sm text-ink-3">No campaign pages yet.</p>}
         <div className="divider my-1.5" />
+        <MenuItem
+          icon={LayoutGrid}
+          onClick={() => {
+            navigate('/dashboard?list=1');
+            onNavigate?.();
+          }}
+        >
+          All campaign pages
+        </MenuItem>
         <MenuItem
           icon={Plus}
           onClick={() => {

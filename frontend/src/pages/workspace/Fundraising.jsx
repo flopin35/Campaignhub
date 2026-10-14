@@ -36,17 +36,25 @@ function FundraisingManager() {
   const pending = donations.filter((d) => ['pending_review', 'pending'].includes(d.paymentStatus));
   const enabled = !!campaign.sections?.donate && !!campaign.donation?.number;
 
+  const [busyId, setBusyId] = useState(null);
   const confirm = async (d) => {
+    if (busyId) return;
+    setBusyId(d.id);
     try {
       await verifyDonation(d.id, { ownerId: campaign.ownerId, campaignTitle: campaign.title, donorName: d.donorName, amount: d.amount });
       toast(`${cedis(d.amount)} from ${d.donorName} confirmed`, 'success');
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      setBusyId(null);
     }
   };
   const reject = async (d) => {
+    if (busyId) return;
     if (!window.confirm(`Mark ${d.paymentReference} as not received?`)) return;
+    setBusyId(d.id);
     await rejectDonation(d.id).catch((err) => toast(err.message, 'error'));
+    setBusyId(null);
   };
 
   const exportAll = () => downloadCsv(`${campaign.slug}-donations`, donations, [
@@ -108,8 +116,8 @@ function FundraisingManager() {
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" icon={Check} onClick={() => confirm(d)}>Received</Button>
-                      <Button size="sm" variant="ghost" icon={X} onClick={() => reject(d)}>Not received</Button>
+                      <Button size="sm" icon={Check} onClick={() => confirm(d)} loading={busyId === d.id} disabled={!!busyId}>Received</Button>
+                      <Button size="sm" variant="ghost" icon={X} onClick={() => reject(d)} disabled={!!busyId}>Not received</Button>
                     </div>
                   </li>
                 ))}
@@ -181,7 +189,9 @@ function DonationSetup({ open, onClose, campaign }) {
     if (!open) return;
     setForm({ network: 'MTN MoMo', number: '', name: '', goal: '', note: '', ...(campaign.donation || {}) });
     setShow(!!campaign.sections?.donate);
-  }, [open, campaign.donation, campaign.sections]);
+    // Load saved values only when the dialog opens — live updates (e.g. page views) must not wipe edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const save = async (e) => {
     e.preventDefault();

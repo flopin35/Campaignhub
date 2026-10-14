@@ -131,9 +131,16 @@ export default function PageEditor() {
   const live = isCampaignVisible(campaign);
   const constituencies = getConstituenciesForRegion(form.region);
 
+  // What the owner may do with visibility depends on who took the page offline.
+  const suspended = campaign.status === 'suspended' || campaign.status === 'rejected' || (campaign.disabled && campaign.status === 'active');
+  const ownerHidden = campaign.status === 'disabled';
+  const canHide = campaign.status === 'active' && !campaign.disabled;
+  const [busyAction, setBusyAction] = useState(null);
+
   const toggleVisibility = async () => {
+    setBusyAction('visibility');
     try {
-      if (campaign.status === 'disabled' || campaign.disabled) {
+      if (ownerHidden) {
         await relaunchCampaign(campaign.id);
         toast('Your page is public again', 'success');
       } else {
@@ -142,18 +149,23 @@ export default function PageEditor() {
       }
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      setBusyAction(null);
     }
   };
 
   const remove = async () => {
-    const typed = window.prompt(`This permanently deletes "${campaign.title}" and its page. Type DELETE to confirm.`);
+    const typed = window.prompt(`This deletes "${campaign.title}", takes its page offline, stops any card auto-renew and erases its voter list, volunteers, events, ads and results. Donation records are kept for your accounts.\n\nType DELETE to confirm.`);
     if (typed !== 'DELETE') return;
+    setBusyAction('delete');
     try {
       await deleteCampaign(campaign.id);
       toast('Campaign deleted', 'info');
       navigate('/dashboard');
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -165,7 +177,7 @@ export default function PageEditor() {
           <div className="grid sm:grid-cols-2 gap-4">
             <Input className="sm:col-span-2" label="Campaign name" required value={form.title} onChange={on('title')} placeholder="e.g. Ama Mensah for Madina 2028" />
             <Input label="Candidate name" value={form.candidateName} onChange={on('candidateName')} />
-            <Select label="Office" value={form.campaignType} onChange={on('campaignType')} options={OFFICE_LEVELS} />
+            <Select label="Office" value={form.campaignType} onChange={on('campaignType')} options={!form.campaignType || OFFICE_LEVELS.includes(form.campaignType) ? OFFICE_LEVELS : [form.campaignType, ...OFFICE_LEVELS]} />
             <Input label="Party" value={form.party} onChange={on('party')} placeholder="Party or Independent" />
             <Input label="Slogan" value={form.slogan} onChange={on('slogan')} placeholder="e.g. Madina deserves better" maxLength={80} />
             <Select label="Region" value={form.region} onChange={(e) => { set('region', e.target.value); }} options={GHANA_REGIONS} placeholder="Select region" />
@@ -323,18 +335,25 @@ export default function PageEditor() {
           <CardHeader title="Visibility" icon={TriangleAlert} />
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
             <p className="text-sm text-ink-2">
-              {campaign.status === 'disabled' || campaign.disabled
-                ? 'Your page is hidden. Supporters see “page unavailable”.'
-                : 'Hide your page temporarily without losing any data.'}
+              {suspended
+                ? 'CampaignHub has put this page on hold. Contact support to have it reviewed.'
+                : ownerHidden
+                  ? 'Your page is hidden. Supporters see “page unavailable”.'
+                  : canHide
+                    ? 'Hide your page temporarily without losing any data.'
+                    : 'Your page is not public yet — choose a plan or start your free trial to publish it.'}
             </p>
-            <Button variant="secondary" icon={campaign.status === 'disabled' || campaign.disabled ? Eye : EyeOff} onClick={toggleVisibility}>
-              {campaign.status === 'disabled' || campaign.disabled ? 'Make public again' : 'Hide page'}
-            </Button>
+            {(ownerHidden || canHide) && !suspended && (
+              <Button variant="secondary" icon={ownerHidden ? Eye : EyeOff} onClick={toggleVisibility} loading={busyAction === 'visibility'}>
+                {ownerHidden ? 'Make public again' : 'Hide page'}
+              </Button>
+            )}
+            {suspended && <Button variant="secondary" to="/support">Contact support</Button>}
           </div>
           <div className="divider my-5" />
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-            <p className="text-sm text-ink-2">Delete this campaign page permanently.</p>
-            <Button variant="danger-ghost" icon={Trash2} onClick={remove}>Delete campaign</Button>
+            <p className="text-sm text-ink-2">Delete this campaign and erase its voter data. This cannot be undone.</p>
+            <Button variant="danger-ghost" icon={Trash2} onClick={remove} loading={busyAction === 'delete'}>Delete campaign</Button>
           </div>
         </Card>
       </div>

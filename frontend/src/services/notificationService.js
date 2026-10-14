@@ -64,7 +64,11 @@ export async function markAllNotificationsRead(userId) {
   const q = query(collection(db, 'notifications'), where('userId', '==', userId), where('read', '==', false));
   const snap = await getDocs(q);
   if (snap.empty) return;
-  const batch = writeBatch(db);
-  snap.docs.forEach((d) => batch.update(doc(db, 'notifications', d.id), { read: true }));
-  await batch.commit();
+  // Firestore batches hold at most 500 writes.
+  for (let i = 0; i < snap.docs.length; i += 450) {
+    const batch = writeBatch(db);
+    snap.docs.slice(i, i + 450).forEach((d) => batch.update(doc(db, 'notifications', d.id), { read: true }));
+    // eslint-disable-next-line no-await-in-loop
+    await batch.commit();
+  }
 }

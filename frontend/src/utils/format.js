@@ -66,12 +66,24 @@ export function daysUntilDate(value) {
 
 /** Normalise Ghana phone numbers to 0XXXXXXXXX where possible. */
 export function normalizePhone(raw = '') {
-  let digits = String(raw).replace(/[^\d+]/g, '');
-  if (digits.startsWith('+233')) digits = `0${digits.slice(4)}`;
-  else if (digits.startsWith('233') && digits.length === 12) digits = `0${digits.slice(3)}`;
-  digits = digits.replace(/\D/g, '');
-  if (digits.length === 9) digits = `0${digits}`;
-  return digits;
+  let d = String(raw || '').trim().replace(/[^\d+]/g, '');
+  if (d.startsWith('00')) d = `+${d.slice(2)}`;
+  if (d.startsWith('+233')) {
+    d = d.slice(4);
+  } else if (d.startsWith('+')) {
+    return d.replace(/\D/g, ''); // another country — keep the international digits
+  } else if (d.startsWith('233') && d.length >= 12) {
+    d = d.slice(3);
+  }
+  d = d.replace(/\D/g, '');
+  if (d.length === 9) d = `0${d}`;
+  return d;
+}
+
+/** Ghana numbers become 0XXXXXXXXX; foreign numbers stay as 10–15 international digits. */
+export function isValidPhone(phone = '') {
+  const p = normalizePhone(phone);
+  return /^0[2-5]\d{8}$/.test(p) || (/^[1-9]\d{9,14}$/.test(p) && !p.startsWith('233'));
 }
 
 /** International format for wa.me links (233XXXXXXXXX). */

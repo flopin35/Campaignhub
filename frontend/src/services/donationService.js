@@ -14,6 +14,7 @@ import { db } from '../firebase/auth';
 import { generatePaymentReference } from '../utils/paymentReference';
 import { uploadPaymentScreenshot } from './storageService';
 import { createNotification } from './notificationService';
+import { normalizePhone, isValidPhone } from '../utils/format';
 import { PAYMENT_DETAILS } from '../data/packages';
 
 export { PAYMENT_DETAILS };
@@ -45,17 +46,22 @@ export async function createDonation({
   userId = null,
   recurring = false,
 }) {
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value < 5) throw new Error('The minimum donation is ₵5.');
+  if (value > 1000000) throw new Error('For gifts above ₵1,000,000 please contact the campaign directly.');
+  if (!String(donorName || '').trim()) throw new Error('Enter your name.');
+  if (donorPhone && !isValidPhone(donorPhone)) throw new Error('Enter a valid phone number (e.g. 024 123 4567).');
   const paymentReference = await generatePaymentReference();
 
   const data = {
     campaignId,
     userId,
-    amount: Number(amount),
-    donorName: donorName.trim(),
-    donorPhone: donorPhone.trim(),
-    donorEmail: donorEmail.trim(),
-    region,
-    constituency,
+    amount: value,
+    donorName: String(donorName).trim().slice(0, 120),
+    donorPhone: donorPhone ? normalizePhone(donorPhone) : '',
+    donorEmail: String(donorEmail || '').trim().slice(0, 160),
+    region: String(region || '').slice(0, 80),
+    constituency: String(constituency || '').slice(0, 120),
     anonymous,
     recurring,
     paymentReference,
@@ -70,7 +76,7 @@ export async function createDonation({
   if (ownerId) {
     await createNotification({
       userId: ownerId,
-      message: `Donation received: ₵${amount} for "${campaignTitle}" (ref ${paymentReference})`,
+      message: `Donation received: ₵${value} for "${campaignTitle}" (ref ${paymentReference})`.slice(0, 300),
       type: 'donation_pending',
       campaignId,
     }).catch(() => {});
@@ -146,13 +152,14 @@ export async function recordOfflineDonation(campaignId, { donorName, donorPhone 
   const value = Number(amount);
   if (!donorName?.trim()) throw new Error('Donor name is required');
   if (!Number.isFinite(value) || value < 5) throw new Error('Amount must be at least ₵5');
+  if (value > 1000000) throw new Error('Record gifts above ₵1,000,000 in parts.');
   const paymentReference = await generatePaymentReference();
   const ref = await addDoc(collection(db, 'donations'), {
     campaignId,
     userId: null,
     amount: value,
-    donorName: donorName.trim(),
-    donorPhone: donorPhone.trim(),
+    donorName: donorName.trim().slice(0, 120),
+    donorPhone: donorPhone ? normalizePhone(donorPhone).slice(0, 20) : '',
     donorEmail: '',
     region: '',
     constituency: '',

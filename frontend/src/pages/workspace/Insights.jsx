@@ -151,7 +151,9 @@ function PollDialog({ open, onClose, campaign }) {
     setQuestion(p.question);
     setOptions(p.options);
     setShow(campaign.sections?.poll ?? true);
-  }, [open, campaign.poll, campaign.sections]);
+    // Load saved values only when the dialog opens — live updates (e.g. page views) must not wipe edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const save = async () => {
     const clean = [...new Set(options.map((o) => o.trim()).filter(Boolean))].slice(0, 8);

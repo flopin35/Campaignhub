@@ -3,6 +3,11 @@ const token = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  // Belt and braces for component classes that are sometimes picked at runtime.
+  safelist: [
+    'badge-neutral', 'badge-success', 'badge-warning', 'badge-danger', 'badge-info', 'badge-gold', 'badge-navy',
+    'btn-primary', 'btn-secondary', 'btn-ghost', 'btn-gold', 'btn-danger', 'btn-danger-ghost',
+  ],
   darkMode: 'class',
   theme: {
     extend: {

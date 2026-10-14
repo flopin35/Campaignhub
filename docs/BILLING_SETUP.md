@@ -15,14 +15,41 @@ When a period ends, Pro tools pause and the public page stays up for a **3-day g
 
 ---
 
-## 1. Deploy the new Firestore rules first
+## Fastest way: finish setup from the website (no command line)
 
-The new rules enforce one free trial per account, stop owners editing billing/status fields, and protect the new Pro collections. **Deploy them before the new frontend**:
+1. Publish the site as usual (push to GitHub or run `npx vercel --prod`).
+2. Sign in as the admin (daakukwaku7@gmail.com) and open **Admin → Setup**.
+3. Paste your **new** Paystack secret key (and, if you use them, Flutterwave, Meta and AI keys), then click **Finish setup**.
+   This saves the keys on the server (Firestore `config/secrets`, which nobody can read from the browser — never in the code or git),
+   publishes the security rules, runs the one-time data clean-up and creates the ₵120 / ₵1,200 Paystack plans.
+4. Copy the **Paystack webhook URL** shown on the right into Paystack → Settings → API Keys & Webhooks. That is the only step
+   that has to be done on Paystack's website. (Same for Flutterwave and Meta if you use them — the page shows each URL.)
+
+Values set in Vercel always win over values saved in Admin → Setup, so nothing you already configured there changes.
+The setup page needs `FIREBASE_SERVICE_ACCOUNT` in Vercel (it is already there if OTP sign-in works).
+Everything below is the manual / command-line way of doing the same thing (`node scripts/go-live.mjs` does it in one command).
+
+---
+
+## 1. Deploy the new security rules first, then clean up old data
+
+The new rules enforce one free trial per verified account, stop owners editing billing/status fields, protect voter data and lock down image uploads. **Deploy them before the new frontend**:
 
 ```bash
 cd firebase
-firebase deploy --only firestore:rules --project new1-e94db
+firebase deploy --only firestore:rules,storage --project new1-e94db
 ```
+
+Then run the one-time data check (it only reports until you add `--apply`):
+
+```bash
+cd ../frontend
+node scripts/upgrade-firestore-data.mjs --key ../new1-e94db-firebase-adminsdk-XXXX.json
+node scripts/upgrade-firestore-data.mjs --key ../new1-e94db-firebase-adminsdk-XXXX.json --apply
+```
+
+Read the report. If section A, B or C lists pages you never sold Pro to, run once more with `--apply --strip-unbacked`.
+The admin account must sign in with **Google or an email code** (a verified email) — the rules only treat a verified admin e-mail as admin.
 
 ## 2. Paystack
 
@@ -34,6 +61,7 @@ firebase deploy --only firestore:rules --project new1-e94db
 3. *(Optional, card auto-renew)* **Products → Plans → Create plan**
    - "CampaignHub Pro Monthly", GHS 120, interval Monthly → copy the plan code → `PAYSTACK_PLAN_MONTHLY`
    - "CampaignHub Pro Yearly", GHS 1,200, interval Annually → `PAYSTACK_PLAN_YEARLY`
+   - The amounts must be exactly GHS 120 and GHS 1,200. The server checks this and turns auto-renew off for a plan that doesn't match (Paystack charges the plan's price, not ours).
    - Paystack only auto-renews cards. MoMo customers pay each period (we remind them in-app).
 
 ## 3. Flutterwave
@@ -45,19 +73,20 @@ firebase deploy --only firestore:rules --project new1-e94db
    - Tick "Receive webhook response in JSON" if offered.
 3. Make sure **Mobile money Ghana** and **Card** payment methods are enabled.
 
-You can run with only one provider — the checkout hides the one without a key.
+You can run with only one provider — the checkout hides the one without a key. Flutterwave is only offered when **both** `FLW_SECRET_KEY` and `FLW_WEBHOOK_HASH` are set (without the hash its payment notifications would be rejected).
 
 ## 4. Vercel environment variables
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
 | `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (or `FIREBASE_SERVICE_ACCOUNT`) | ✅ | Already used for OTP — the billing API writes subscriptions with Firebase Admin |
-| `APP_URL` | ✅ | e.g. `https://www.campaignhubgh.com` — used for payment return URLs |
+| `APP_URL` | ✅ | e.g. `https://www.campaignhubgh.com` — used for payment return URLs (falls back to Vercel's production URL) |
 | `PAYSTACK_SECRET_KEY` | one provider | Paystack payments + webhook signature |
 | `FLW_SECRET_KEY`, `FLW_WEBHOOK_HASH` | one provider | Flutterwave payments + webhook check |
 | `PAYSTACK_PLAN_MONTHLY`, `PAYSTACK_PLAN_YEARLY` | optional | Card auto-renew |
 | `OPENAI_API_KEY` or `GEMINI_API_KEY` | for AI Studio | Pro AI writer |
 | `AI_STUDIO_DAILY_LIMIT` | optional | Default 80 drafts per campaign per day |
+| `AI_STUDIO_TRIAL_DAILY_LIMIT` | optional | Default 20 drafts per day while a page is on the free trial |
 
 Redeploy after adding variables.
 

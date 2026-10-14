@@ -2,7 +2,7 @@
  * Production smoke test for CampaignHub
  * Usage: node scripts/smoke-test-production.mjs
  */
-const BASE = 'https://www.campaignhubgh.com';
+const BASE = (process.env.SMOKE_BASE_URL || 'https://www.campaignhubgh.com').replace(/\/$/, '');
 const API_KEY = 'AIzaSyDgq9q4FQf0Mv8_l5njSQKOmAFlpEEl2gk';
 
 let passed = 0;
@@ -66,19 +66,32 @@ try {
 
 // APIs
 try {
-  const ai = await post('/api/ask-ai', { message: 'ping', type: 'presentation' });
-  if (ai.status === 200 && ai.data?.success) ok('API /api/ask-ai');
-  else fail('API /api/ask-ai', `HTTP ${ai.status}`);
+  const cfg = await get('/api/billing/config');
+  const data = JSON.parse(cfg.text || '{}');
+  if (cfg.status === 200 && data?.success) {
+    ok('API /api/billing/config');
+    const p = data.data?.providers || {};
+    if (p.paystack || p.flutterwave) ok(`Payments live: ${[p.paystack && 'Paystack', p.flutterwave && 'Flutterwave'].filter(Boolean).join(' + ')}`);
+    else warn('No payment provider configured — set PAYSTACK_SECRET_KEY and/or FLW_SECRET_KEY + FLW_WEBHOOK_HASH in Vercel');
+  } else fail('API /api/billing/config', `HTTP ${cfg.status}`);
 } catch (err) {
-  fail('API /api/ask-ai', err.message);
+  fail('API /api/billing/config', err.message);
 }
 
 try {
-  const rec = await post('/api/recommendations', {});
-  if (rec.status === 200 && rec.data?.success) ok('API /api/recommendations');
-  else fail('API /api/recommendations', `HTTP ${rec.status}`);
+  const studio = await post('/api/ai-studio', { task: 'social', prompt: 'ping test' });
+  if (studio.status === 401) ok('API /api/ai-studio requires sign-in');
+  else fail('API /api/ai-studio', `expected 401 without sign-in, got HTTP ${studio.status}`);
 } catch (err) {
-  fail('API /api/recommendations', err.message);
+  fail('API /api/ai-studio', err.message);
+}
+
+try {
+  const old = await post('/api/ask-ai', { message: 'ping' });
+  if (old.status === 410) ok('Old /api/ask-ai is retired');
+  else fail('Old /api/ask-ai', `expected 410, got HTTP ${old.status}`);
+} catch (err) {
+  fail('Old /api/ask-ai', err.message);
 }
 
 try {

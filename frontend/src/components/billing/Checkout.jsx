@@ -14,13 +14,18 @@ const PROVIDER_INFO = {
 
 export function useBillingConfig() {
   const [config, setConfig] = useState(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
-    getBillingConfig().then((c) => alive && setConfig(c));
+    getBillingConfig({ fresh: attempt > 0 }).then((c) => alive && setConfig(c));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [attempt]);
+  if (config) config.retry = () => {
+    setConfig(null);
+    setAttempt((n) => n + 1);
+  };
   return config;
 }
 
@@ -148,7 +153,15 @@ export function CheckoutDialog({ open, onClose, campaign, product = 'pro', defau
 
         <div>
           <p className="label">Pay with</p>
-          {noProviders ? (
+          {config?.unavailable ? (
+            <Alert
+              tone="warning"
+              title="Couldn’t load payment options"
+              action={<Button size="sm" variant="secondary" icon={RefreshCw} onClick={() => config.retry?.()}>Try again</Button>}
+            >
+              Check your internet connection and try again.
+            </Alert>
+          ) : noProviders ? (
             <Alert tone="warning" title="Online payments are being set up">
               Contact campaignhubgh@gmail.com and we&apos;ll activate your plan manually.
             </Alert>

@@ -32,7 +32,7 @@ export function MyCampaignsProvider({ children, mock }) {
     setState((s) => ({ ...s, loading: true }));
     return subscribeMyCampaigns(
       user.uid,
-      (campaigns) => setState({ campaigns, loading: false, error: null }),
+      (campaigns) => setState({ campaigns: campaigns.filter((c) => c.status !== 'deleted'), loading: false, error: null }),
       (err) => setState({ campaigns: [], loading: false, error: err.message }),
     );
   }, [user?.uid, mock]);
@@ -68,7 +68,7 @@ function makeSubscribers(uid) {
 }
 
 export function WorkspaceProvider({ campaignId, children, mock }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [campaign, setCampaign] = useState(mock?.campaign || null);
   const [loading, setLoading] = useState(!mock);
   const [error, setError] = useState(null);
@@ -84,16 +84,25 @@ export function WorkspaceProvider({ campaignId, children, mock }) {
     return subscribeCampaign(
       campaignId,
       (c) => {
-        setCampaign(c);
+        // Only the owner (or an admin) gets a workspace; archived pages behave as removed.
+        if (c && c.status === 'deleted') {
+          setCampaign(null);
+          setError('not-found');
+        } else if (c && user?.uid && c.ownerId !== user.uid && !isAdmin) {
+          setCampaign(null);
+          setError('forbidden');
+        } else {
+          setCampaign(c);
+          setError(c ? null : 'not-found');
+        }
         setLoading(false);
-        if (!c) setError('not-found');
       },
       (err) => {
         setError(err.code === 'permission-denied' ? 'forbidden' : err.message);
         setLoading(false);
       },
     );
-  }, [campaignId, mock]);
+  }, [campaignId, mock, user?.uid, isAdmin]);
 
   // Tear down collection listeners when switching campaigns.
   useEffect(() => {

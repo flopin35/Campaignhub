@@ -24,6 +24,8 @@ import { downloadCsv, parseCsv, pick } from '../../utils/csv';
 import { formatNumber, timeAgo, toWhatsAppNumber, cn } from '../../utils/format';
 
 const LEVEL_BADGE = { strong: 'info', leaning: 'info', undecided: 'neutral', opposed: 'danger', unknown: 'neutral' };
+/* Written out in full so Tailwind 3 keeps these classes in the production CSS. */
+const LEVEL_SELECT_CLASS = { strong: 'badge-info', leaning: 'badge-info', undecided: 'badge-neutral', opposed: 'badge-danger', unknown: 'badge-neutral' };
 const LEVEL_DOT = {
   strong: 'rgb(var(--viz-strong))',
   leaning: 'rgb(var(--viz-lean))',
@@ -283,7 +285,7 @@ function LevelSelect({ value, onChange }) {
     <div className="relative inline-flex items-center">
       <span className="absolute left-2.5 w-2 h-2 rounded-full pointer-events-none border border-line-strong" style={{ background: LEVEL_DOT[current] }} />
       <select
-        className={cn('input input-sm h-8 pl-6 pr-8 text-xs w-[128px] font-medium', `badge-${LEVEL_BADGE[current]}`)}
+        className={cn('input input-sm h-8 pl-6 pr-8 text-xs w-[128px] font-medium', LEVEL_SELECT_CLASS[current] || 'badge-neutral')}
         value={current}
         onChange={(e) => onChange(e.target.value)}
         aria-label="Support level"
@@ -327,6 +329,7 @@ function VoterDialog({ voter, onClose, campaign }) {
   const [form, setForm] = useState(EMPTY_VOTER);
   const [saving, setSaving] = useState(false);
   const [contact, setContact] = useState({ method: 'door', note: '' });
+  const [logging, setLogging] = useState(false);
 
   useEffect(() => {
     if (!voter) return;
@@ -363,12 +366,16 @@ function VoterDialog({ voter, onClose, campaign }) {
   };
 
   const logContact = async () => {
+    if (logging) return;
+    setLogging(true);
     try {
       await logVoterContact(voter, { method: contact.method, note: contact.note, supportLevel: form.supportLevel });
       toast('Contact logged', 'success');
       onClose();
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      setLogging(false);
     }
   };
 
@@ -427,7 +434,7 @@ function VoterDialog({ voter, onClose, campaign }) {
               <option value="event">At an event</option>
             </select>
             <input className="input" placeholder="What did they say? (optional)" value={contact.note} onChange={(e) => setContact((c) => ({ ...c, note: e.target.value }))} />
-            <Button variant="secondary" onClick={logContact}>Log contact</Button>
+            <Button variant="secondary" onClick={logContact} loading={logging}>Log contact</Button>
           </div>
           <p className="hint">The support level selected above is saved with the contact.</p>
         </div>
@@ -439,11 +446,13 @@ function VoterDialog({ voter, onClose, campaign }) {
 const SAMPLE_CSV = 'name,phone,polling station,region,constituency,support,tags\nAma Mensah,0241234567,Methodist JHS A,Greater Accra,Madina,strong,market women\nKofi Boateng,0209876543,Zongo Park,Greater Accra,Madina,undecided,youth';
 
 function normaliseLevel(raw = '') {
-  const v = raw.toLowerCase();
-  if (/strong|yes|sure|definite/.test(v)) return 'strong';
-  if (/lean|likely|maybe yes|soft/.test(v)) return 'leaning';
-  if (/undecided|unsure|maybe|swing/.test(v)) return 'undecided';
-  if (/oppos|against|no\b|other party/.test(v)) return 'opposed';
+  const v = String(raw).toLowerCase().trim();
+  if (!v) return 'unknown';
+  // Most specific first: "not sure" must not match "sure", "maybe yes" must not count as strong.
+  if (/oppos|against|other party|^no$|^no\b|won'?t vote for|will not vote/.test(v)) return 'opposed';
+  if (/undecided|unsure|not sure|don'?t know|swing|^maybe$|neutral/.test(v)) return 'undecided';
+  if (/lean|likely|maybe yes|probably|soft/.test(v)) return 'leaning';
+  if (/strong|^yes$|^yes\b|definite|sure|core|solid/.test(v)) return 'strong';
   return 'unknown';
 }
 

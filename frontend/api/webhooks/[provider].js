@@ -5,6 +5,7 @@
  *
  * Every successful charge is re-verified with the provider's API before fulfilment.
  */
+import { loadRuntimeConfig } from '../_lib/runtimeConfig.js';
 import {
   readRawBody,
   requireAdminSdk,
@@ -28,9 +29,11 @@ async function handlePaystack(admin, event) {
   switch (event.event) {
     case 'charge.success': {
       const payment = await verifyWithProvider({ provider: 'paystack', reference: data.reference });
+      // Provider API unreachable → 500 so Paystack retries instead of the payment being lost.
+      if (payment.status === 'unknown') throw new Error('Paystack verify unavailable');
       if (!payment.paid) return { handled: false, reason: 'not_paid' };
       const known = await admin.db.collection('billing_transactions').doc(payment.reference).get();
-      if (known.exists) return fulfillPayment(admin, payment);
+      if (known.exists && known.data().campaignId) return fulfillPayment(admin, payment);
       return fulfillPaystackRenewal(admin, payment);
     }
     case 'subscription.create':
@@ -53,6 +56,7 @@ async function handleFlutterwave(admin, event) {
     reference: data.tx_ref,
     transactionId: data.id ? String(data.id) : '',
   });
+  if (payment.status === 'unknown') throw new Error('Flutterwave verify unavailable');
   if (!payment.paid) return { handled: false, reason: 'not_paid' };
   return fulfillPayment(admin, payment);
 }
@@ -62,6 +66,7 @@ export default async function handler(req, res) {
 
   const provider = getProvider(req);
   const raw = await readRawBody(req);
+  await loadRuntimeConfig();
 
   let event;
   try {

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
+import ErrorBoundary from '../../components/ErrorBoundary';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ExternalLink, TriangleAlert, Clock, Crown, EyeOff } from 'lucide-react';
 import { WorkspaceProvider, useWorkspace } from '../../context/WorkspaceContext';
@@ -105,9 +106,11 @@ function WorkspaceBody({ section }) {
         )}
       </div>
       {section !== 'billing' && <BillingBanner />}
-      <Suspense fallback={<PageLoader />}>
-        <Section />
-      </Suspense>
+      <ErrorBoundary resetKey={section} compact>
+        <Suspense fallback={<PageLoader />}>
+          <Section />
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }

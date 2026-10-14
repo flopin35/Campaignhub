@@ -56,10 +56,18 @@ function resolveContentType(file) {
   return typeMap[ext] || 'image/jpeg';
 }
 
-function buildFilename(file, label) {
+function randomId(len = 12) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+}
+
+/** "<uid>-<random>-<label>.<ext>" — storage.rules only lets the uploader create files that start with their uid. */
+function buildFilename(file, label, uid) {
   const ext = getFileExtension(file);
-  const safeLabel = label || 'image';
-  return `${Date.now()}-${safeLabel}.${ext}`;
+  const safeLabel = String(label || 'image').replace(/[^a-z0-9_-]/gi, '').slice(0, 20) || 'image';
+  return `${uid}-${Date.now().toString(36)}${randomId()}-${safeLabel}.${ext}`;
 }
 
 export function validateImageFile(file, maxSize = MAX_FILE_SIZE) {
@@ -190,7 +198,7 @@ export async function uploadToStorage(file, folder, options = {}) {
   const prepared = await compressImageIfNeeded(file);
   validateImageFile(prepared);
 
-  const filename = buildFilename(prepared, label);
+  const filename = buildFilename(prepared, label, auth.currentUser.uid);
   const path = `${folder}/${filename}`;
   const storageRef = ref(storage, path);
 

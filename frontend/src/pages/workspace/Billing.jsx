@@ -22,7 +22,7 @@ export default function Billing() {
   const [starting, setStarting] = useState(false);
   const [receipt, setReceipt] = useState(null);
 
-  const trialAvailable = canStartTrial(userProfile) && !billing.isPro;
+  const trialAvailable = canStartTrial(userProfile, campaign) && !billing.isPro;
   const paid = transactions.filter((t) => t.status === 'success');
 
   const stopRenewal = async () => {
@@ -77,7 +77,7 @@ export default function Billing() {
               <>
                 <KeyValue label="Billing cycle" value={billing.cycle === 'yearly' ? 'Yearly · ₵1,200' : 'Monthly · ₵120'} />
                 <KeyValue label="Paid through" value={formatDay(billing.endsAt)} />
-                <KeyValue label="Renewal" value={billing.autoRenew ? `Automatic (card${campaign.subscription?.cardLast4 ? ` •••• ${campaign.subscription.cardLast4}` : ''})` : 'Manual — pay before it ends'} />
+                <KeyValue label="Renewal" value={billing.autoRenew ? 'Automatic — card via Paystack' : 'Manual — pay before it ends'} />
                 <KeyValue label="Paid with" value={campaign.subscription?.provider === 'flutterwave' ? 'Flutterwave' : 'Paystack'} />
               </>
             )}

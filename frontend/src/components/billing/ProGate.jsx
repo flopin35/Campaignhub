@@ -23,7 +23,7 @@ export function LockedPanel({ campaign, billing, title, description, bullets = [
   const { toast } = useToast();
   const [checkout, setCheckout] = useState(null);
   const [starting, setStarting] = useState(false);
-  const trialAvailable = canStartTrial(userProfile) && billing.state !== 'trialing';
+  const trialAvailable = canStartTrial(userProfile, campaign) && billing.state !== 'trialing';
 
   const startTrial = async () => {
     setStarting(true);

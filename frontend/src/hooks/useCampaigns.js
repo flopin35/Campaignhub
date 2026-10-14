@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { normalizeCampaign, isCampaignVisible, sortCampaignsForDisplay } from '../utils/campaignHelpers';
-import { expireOverdueCampaigns } from '../services/campaignFirestoreService';
+import { expireOverdueCampaigns, pickCampaignForSlug } from '../services/campaignFirestoreService';
 import { expireCampaignBoosts } from '../services/boostService';
 
 const PUBLIC_POLL_MS = 90_000;
@@ -155,11 +155,14 @@ export function useCampaign(slug, { ownerId = null } = {}) {
 
     const finish = (snap, notFoundMessage = 'Campaign not found') => {
       if (cancelled) return;
-      if (snap.empty) {
+      const found = snap.empty
+        ? null
+        : pickCampaignForSlug(snap.docs.map(normalizeCampaign).filter((c) => c.status !== 'deleted'));
+      if (!found) {
         setCampaign(null);
         setError(notFoundMessage);
       } else {
-        setCampaign(normalizeCampaign(snap.docs[0]));
+        setCampaign(found);
         setError(null);
       }
       setLoading(false);

@@ -21,7 +21,30 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { toMs } from '../utils/billing';
-import { normalizePhone, randomToken, shortCode } from '../utils/format';
+import { normalizePhone, isValidPhone, randomToken, shortCode } from '../utils/format';
+
+/**
+ * Security rules look up the campaign for every document in a batch, and Firestore allows
+ * only 20 such look-ups per batch — so owner imports are written in small batches, 4 at a time.
+ */
+async function commitInChunks(items, size, write, onProgress) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  let done = 0;
+  for (let i = 0; i < chunks.length; i += 4) {
+    // eslint-disable-next-line no-await-in-loop
+    await Promise.all(chunks.slice(i, i + 4).map(async (chunk) => {
+      const batch = writeBatch(db);
+      chunk.forEach((item) => write(batch, item));
+      await batch.commit();
+      done += chunk.length;
+      onProgress?.(done, items.length);
+    }));
+  }
+  return done;
+}
+
+export const SUPPORT_LEVEL_VALUES = ['strong', 'leaning', 'undecided', 'opposed', 'unknown'];
 
 const byCreatedDesc = (a, b) => toMs(b.createdAt) - toMs(a.createdAt);
 
@@ -57,6 +80,8 @@ function cleanVoter(input = {}) {
         .slice(0, 12);
     } else if (k === 'phone') {
       out.phone = normalizePhone(input.phone);
+    } else if (k === 'supportLevel') {
+      if (SUPPORT_LEVEL_VALUES.includes(input.supportLevel)) out.supportLevel = input.supportLevel;
     } else if (typeof input[k] === 'string') {
       out[k] = input[k].trim().slice(0, k === 'notes' ? 1000 : 120);
     } else {
@@ -69,7 +94,7 @@ function cleanVoter(input = {}) {
 export async function addVoter(campaignId, input, { source = 'manual', collectedBy = '' } = {}) {
   const data = cleanVoter(input);
   if (!data.name) throw new Error('Name is required');
-  if (!data.phone || data.phone.length < 9) throw new Error('Enter a valid phone number');
+  if (!isValidPhone(data.phone)) throw new Error('Enter a valid phone number (e.g. 024 123 4567)');
   const payload = {
     campaignId,
     userId: null,
@@ -116,14 +141,14 @@ export async function logVoterContact(voter, { method, supportLevel, note }) {
   await updateDoc(doc(db, 'supporters', voter.id), updates);
 }
 
-/** Bulk import (CSV). Skips phones already in the list. Writes in batches of 400. */
+/** Bulk import (CSV). Skips invalid phones and phones already in the list. */
 export async function importVoters(campaignId, rows, existing = [], onProgress) {
   const seen = new Set(existing.map((v) => normalizePhone(v.phone)));
   const clean = [];
   let skipped = 0;
   rows.forEach((r) => {
     const v = cleanVoter(r);
-    if (!v.name || !v.phone || v.phone.length < 9 || seen.has(v.phone)) {
+    if (!v.name || !isValidPhone(v.phone) || seen.has(v.phone)) {
       skipped += 1;
       return;
     }
@@ -131,37 +156,28 @@ export async function importVoters(campaignId, rows, existing = [], onProgress) 
     clean.push(v);
   });
 
-  let written = 0;
-  for (let i = 0; i < clean.length; i += 400) {
-    const batch = writeBatch(db);
-    clean.slice(i, i + 400).forEach((v) => {
-      const ref = doc(collection(db, 'supporters'));
-      batch.set(ref, {
-        campaignId,
-        userId: null,
-        email: '',
-        region: '',
-        constituency: '',
-        pollingStation: '',
-        supportLevel: 'unknown',
-        tags: [],
-        interests: [],
-        isVolunteer: false,
-        totalDonated: 0,
-        donationCount: 0,
-        eventsAttended: 0,
-        contactCount: 0,
-        ...v,
-        source: 'import',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+  const written = await commitInChunks(clean, 10, (batch, v) => {
+    batch.set(doc(collection(db, 'supporters')), {
+      campaignId,
+      userId: null,
+      email: '',
+      region: '',
+      constituency: '',
+      pollingStation: '',
+      supportLevel: 'unknown',
+      tags: [],
+      interests: [],
+      isVolunteer: false,
+      totalDonated: 0,
+      donationCount: 0,
+      eventsAttended: 0,
+      contactCount: 0,
+      ...v,
+      source: 'import',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-    // eslint-disable-next-line no-await-in-loop
-    await batch.commit();
-    written += Math.min(400, clean.length - i);
-    onProgress?.(written, clean.length);
-  }
+  }, onProgress);
   return { imported: written, skipped };
 }
 
@@ -256,29 +272,22 @@ export async function saveStation(campaignId, input, id) {
 }
 
 export async function importStations(campaignId, rows) {
-  let count = 0;
-  for (let i = 0; i < rows.length; i += 400) {
-    const batch = writeBatch(db);
-    rows.slice(i, i + 400).forEach((r) => {
-      if (!r.name) return;
-      batch.set(doc(collection(db, 'polling_stations')), {
-        campaignId,
-        code: String(r.code || '').trim().toUpperCase().slice(0, 30),
-        name: String(r.name).trim().slice(0, 120),
-        electoralArea: String(r.electoralArea || '').trim().slice(0, 80),
-        constituency: String(r.constituency || '').trim().slice(0, 80),
-        registeredVoters: Number(r.registeredVoters) || 0,
-        agentName: String(r.agentName || '').trim().slice(0, 80),
-        agentPhone: normalizePhone(r.agentPhone || ''),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      count += 1;
+  const valid = rows.filter((r) => r.name && String(r.name).trim());
+  // Each station is checked for "owner + Pro" (2 look-ups), so 9 per batch stays under the limit.
+  return commitInChunks(valid, 9, (batch, r) => {
+    batch.set(doc(collection(db, 'polling_stations')), {
+      campaignId,
+      code: String(r.code || '').trim().toUpperCase().slice(0, 30),
+      name: String(r.name).trim().slice(0, 120),
+      electoralArea: String(r.electoralArea || '').trim().slice(0, 80),
+      constituency: String(r.constituency || '').trim().slice(0, 80),
+      registeredVoters: Number(r.registeredVoters) || 0,
+      agentName: String(r.agentName || '').trim().slice(0, 80),
+      agentPhone: normalizePhone(r.agentPhone || ''),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
-    // eslint-disable-next-line no-await-in-loop
-    await batch.commit();
-  }
-  return count;
+  });
 }
 
 export async function deleteStation(id) {
@@ -453,7 +462,12 @@ export async function bumpEventCheckIn(id, delta = 1) {
 }
 
 export async function getPublicEvents(campaignId) {
-  const snap = await getDocs(query(collection(db, 'campaign_events'), where('campaignId', '==', campaignId)));
+  // Security rules only let visitors read events marked public, so the query must ask for exactly those.
+  const snap = await getDocs(query(
+    collection(db, 'campaign_events'),
+    where('campaignId', '==', campaignId),
+    where('isPublic', '==', true),
+  ));
   const now = Date.now() - 6 * 3600000;
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))

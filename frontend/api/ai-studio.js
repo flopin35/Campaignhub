@@ -3,6 +3,7 @@
  * Requires a signed-in owner of a campaign page that is on Pro or in trial.
  * Daily cap per campaign keeps provider costs predictable.
  */
+import { loadRuntimeConfig } from './_lib/runtimeConfig.js';
 import {
   HttpError,
   applyCors,
@@ -11,9 +12,12 @@ import {
   requireUser,
   loadOwnedCampaign,
   campaignHasPro,
+  campaignIsTrialOnly,
 } from './_lib/billing.js';
 
 const DAILY_LIMIT = Number(process.env.AI_STUDIO_DAILY_LIMIT || 80);
+/** Free-trial pages get a smaller daily allowance so throwaway accounts cannot run up AI bills. */
+const TRIAL_DAILY_LIMIT = Number(process.env.AI_STUDIO_TRIAL_DAILY_LIMIT || 20);
 
 const TASKS = {
   speech: { label: 'Rally speech', maxTokens: 1400, guide: 'Write a stirring campaign speech to be delivered at a rally or town hall. Open strong, tell one short local story, list 3 concrete commitments, end with a call to vote. Use short spoken sentences and natural pauses (…).' },
@@ -29,19 +33,21 @@ const TASKS = {
 
 const LANGUAGES = ['English', 'Twi', 'Fante', 'Ga', 'Ewe', 'Hausa', 'Dagbani', 'Pidgin'];
 
+const clip = (v, n = 160) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+
 function systemPrompt(campaign, language, tone) {
   const facts = [
-    campaign.candidateName || campaign.ownerName ? `Candidate: ${campaign.candidateName || campaign.ownerName}` : '',
-    campaign.campaignType ? `Office: ${campaign.campaignType}` : '',
-    campaign.party ? `Party: ${campaign.party}` : '',
-    campaign.constituency ? `Constituency: ${campaign.constituency}` : '',
-    campaign.region ? `Region: ${campaign.region}` : '',
-    campaign.slogan ? `Slogan: ${campaign.slogan}` : '',
-    campaign.title ? `Campaign: ${campaign.title}` : '',
+    campaign.candidateName || campaign.ownerName ? `Candidate: ${clip(campaign.candidateName || campaign.ownerName, 80)}` : '',
+    campaign.campaignType ? `Office: ${clip(campaign.campaignType, 60)}` : '',
+    campaign.party ? `Party: ${clip(campaign.party, 80)}` : '',
+    campaign.constituency ? `Constituency: ${clip(campaign.constituency, 80)}` : '',
+    campaign.region ? `Region: ${clip(campaign.region, 60)}` : '',
+    campaign.slogan ? `Slogan: ${clip(campaign.slogan, 120)}` : '',
+    campaign.title ? `Campaign: ${clip(campaign.title, 120)}` : '',
     Array.isArray(campaign.priorities) && campaign.priorities.length
-      ? `Priorities: ${campaign.priorities.map((p) => p.title).filter(Boolean).join('; ')}`
+      ? `Priorities: ${campaign.priorities.slice(0, 6).map((p) => clip(p?.title, 80)).filter(Boolean).join('; ')}`
       : '',
-  ].filter(Boolean).join('\n');
+  ].filter(Boolean).join('\n').slice(0, 1500);
 
   return [
     'You are CampaignHub Studio, an expert political communications writer for campaigns in Ghana.',
@@ -112,6 +118,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return sendJson(res, 405, { success: false, message: 'Method not allowed' });
 
   try {
+    await loadRuntimeConfig();
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const task = TASKS[body.task] ? body.task : 'social';
     const language = LANGUAGES.includes(body.language) ? body.language : 'English';
@@ -126,17 +133,18 @@ export default async function handler(req, res) {
       throw new HttpError(402, 'AI Studio is part of CampaignHub Pro. Renew your plan to keep writing.', 'PRO_REQUIRED');
     }
 
+    const limit = campaignIsTrialOnly(campaign) && !user.isAdmin ? TRIAL_DAILY_LIMIT : DAILY_LIMIT;
     const day = new Date().toISOString().slice(0, 10);
     const usageRef = admin.db.collection('ai_usage').doc(`${campaign.id}_${day}`);
     const used = await admin.db.runTransaction(async (t) => {
       const snap = await t.get(usageRef);
       const count = snap.exists ? snap.data().count || 0 : 0;
-      if (count >= DAILY_LIMIT) return -1;
+      if (count >= limit) return -1;
       t.set(usageRef, { campaignId: campaign.id, day, count: count + 1, updatedAt: new Date() }, { merge: true });
       return count + 1;
     });
     if (used < 0) {
-      throw new HttpError(429, `Daily AI limit reached (${DAILY_LIMIT} drafts). It resets at midnight.`);
+      throw new HttpError(429, `Daily AI limit reached (${limit} drafts${limit === TRIAL_DAILY_LIMIT && limit !== DAILY_LIMIT ? ' on the free trial' : ''}). It resets at midnight.`);
     }
 
     const spec = TASKS[task];
@@ -152,11 +160,16 @@ export default async function handler(req, res) {
 
     return sendJson(res, 200, {
       success: true,
-      data: { text, task, language, remainingToday: Math.max(0, DAILY_LIMIT - used) },
+      data: { text, task, language, remainingToday: Math.max(0, limit - used) },
     });
   } catch (err) {
-    const status = err instanceof HttpError ? err.status : 500;
+    const known = err instanceof HttpError;
+    const status = known ? err.status : 500;
     if (status >= 500) console.error('[ai-studio]', err);
-    return sendJson(res, status, { success: false, message: err.message || 'AI error', code: err.code });
+    return sendJson(res, status, {
+      success: false,
+      message: known ? err.message : 'The AI writer hit a problem. Please try again in a minute.',
+      code: known ? err.code : 'SERVER_ERROR',
+    });
   }
 }

@@ -4,7 +4,8 @@
  *
  * Firestore writes:
  *   billing_transactions/{reference}  — one doc per checkout (server-only writes)
- *   campaigns/{id}.subscription        — Pro status for that campaign page
+ *   campaigns/{id}.subscription        — public Pro status for that campaign page (no provider secrets)
+ *   billing_accounts/{campaignId}      — private provider codes (Paystack customer / plan / subscription)
  *   campaigns/{id}.boost*              — Spotlight placement
  *   notifications/{auto}               — receipt notification for the owner
  */
@@ -48,6 +49,7 @@ export function applyCors(req, res, methods = 'GET, POST, OPTIONS') {
 
 export function getAppOrigin(req) {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   const origin = req.headers?.origin;
   if (origin && /^https?:\/\//.test(origin)) return origin.replace(/\/$/, '');
   const host = req.headers?.['x-forwarded-host'] || req.headers?.host;
@@ -110,11 +112,13 @@ export async function requireUser(req, admin) {
   if (!token) throw new HttpError(401, 'Please sign in to continue.', 'UNAUTHENTICATED');
   try {
     const decoded = await admin.auth.verifyIdToken(token);
+    const email = (decoded.email || '').toLowerCase();
     return {
       uid: decoded.uid,
-      email: (decoded.email || '').toLowerCase(),
+      email,
+      emailVerified: decoded.email_verified === true,
       name: decoded.name || '',
-      isAdmin: (decoded.email || '').toLowerCase() === ADMIN_EMAIL,
+      isAdmin: email === ADMIN_EMAIL && decoded.email_verified === true,
     };
   } catch {
     throw new HttpError(401, 'Your session expired. Sign in again.', 'UNAUTHENTICATED');
@@ -143,13 +147,21 @@ export function tsToMs(value) {
   return 0;
 }
 
-/** Is the campaign currently on Pro (paid, trial or legacy premium)? Mirrors src/utils/billing.js */
+/** Is the campaign currently on Pro (paid, trial or legacy premium)? Mirrors src/utils/billing.js and isProData() in firestore.rules */
 export function campaignHasPro(campaign, now = Date.now()) {
   if (!campaign) return false;
   if (tsToMs(campaign.subscription?.currentPeriodEnd) > now) return true;
-  if (campaign.packageType === 'trial' && tsToMs(campaign.trialEndsAt || campaign.endDate) > now) return true;
+  if (campaign.packageType === 'trial' && tsToMs(campaign.trialEndsAt) > now) return true;
   if (tsToMs(campaign.premiumFeatures?.['campaign-crm']?.expiresAt) > now) return true;
   return false;
+}
+
+/** True while the campaign is Pro only because of the free trial (no paid period). */
+export function campaignIsTrialOnly(campaign, now = Date.now()) {
+  if (!campaign) return false;
+  if (tsToMs(campaign.subscription?.currentPeriodEnd) > now) return false;
+  if (tsToMs(campaign.premiumFeatures?.['campaign-crm']?.expiresAt) > now) return false;
+  return campaign.packageType === 'trial' && tsToMs(campaign.trialEndsAt) > now;
 }
 
 /* ------------------------------------------------------------------ */
@@ -169,7 +181,9 @@ export function getProviderConfig() {
       },
     },
     flutterwave: {
-      enabled: !!flwSecret,
+      // Without the webhook hash every Flutterwave webhook is rejected, so payments made by
+      // customers who close the tab would never be applied — treat it as not configured.
+      enabled: !!flwSecret && !!(process.env.FLW_WEBHOOK_HASH || process.env.FLW_SECRET_HASH || '').trim(),
       secret: flwSecret,
       webhookHash: (process.env.FLW_WEBHOOK_HASH || process.env.FLW_SECRET_HASH || '').trim(),
     },
@@ -180,6 +194,7 @@ export function publicBillingConfig() {
   const cfg = getProviderConfig();
   return {
     currency: CURRENCY,
+    serverTime: Date.now(),
     providers: {
       paystack: cfg.paystack.enabled,
       flutterwave: cfg.flutterwave.enabled,
@@ -234,11 +249,19 @@ export async function createCheckout({ admin, user, campaign, input, origin }) {
   if (product === 'spotlight') {
     const live = campaign.status === 'active' && !campaign.disabled && tsToMs(campaign.endDate) > Date.now();
     if (!live) throw new HttpError(400, 'Your campaign page must be live before you can buy a Spotlight placement.');
+    if (tsToMs(campaign.endDate) < Date.now() + item.durationMs) {
+      throw new HttpError(400, 'Your page goes offline before this Spotlight would end. Renew Pro first, or choose a shorter Spotlight.');
+    }
   }
 
-  const planCode = product === 'pro' && provider === 'paystack' && input.autoRenew
+  let planCode = product === 'pro' && provider === 'paystack' && input.autoRenew
     ? cfg.paystack.plans[item.cycle]
     : '';
+  if (planCode && !(await paystackPlanMatches(cfg.paystack.secret, planCode, item))) {
+    // A mis-priced plan would overcharge or under-charge the card — fall back to a one-off payment.
+    console.error(`[billing] Paystack plan ${planCode} does not match ${item.amount} ${CURRENCY}/${item.cycle}; auto-renew disabled for this checkout.`);
+    planCode = '';
+  }
   const autoRenew = !!planCode;
 
   const reference = generateReference(product);
@@ -338,6 +361,29 @@ export async function createCheckout({ admin, user, campaign, input, origin }) {
   return { url: data.data.link, reference, provider };
 }
 
+const PAYSTACK_INTERVAL = { monthly: 'monthly', yearly: 'annually' };
+const planCheckCache = new Map();
+
+/** Paystack charges the PLAN's amount, not ours — make sure the dashboard plan matches the catalog. */
+async function paystackPlanMatches(secret, planCode, item) {
+  const key = `${planCode}:${item.amount}:${item.cycle}`;
+  const cached = planCheckCache.get(key);
+  if (cached && Date.now() - cached.at < 10 * 60000) return cached.ok;
+  let ok = false;
+  try {
+    const { ok: httpOk, data } = await providerFetch(`https://api.paystack.co/plan/${encodeURIComponent(planCode)}`, { secret });
+    const plan = data?.data;
+    ok = !!(httpOk && plan
+      && Number(plan.amount) === Math.round(item.amount * 100)
+      && String(plan.currency || '').toUpperCase() === CURRENCY
+      && (!plan.interval || plan.interval === PAYSTACK_INTERVAL[item.cycle]));
+  } catch {
+    ok = false;
+  }
+  planCheckCache.set(key, { ok, at: Date.now() });
+  return ok;
+}
+
 async function markTransaction(admin, reference, fields) {
   await admin.db.collection('billing_transactions').doc(reference).set(
     { ...fields, updatedAt: new Date() },
@@ -375,6 +421,7 @@ export async function verifyWithProvider({ provider, reference, transactionId })
       paidAt: d.paid_at || d.paidAt || null,
       providerTransactionId: String(d.id || ''),
       customerCode: d.customer?.customer_code || null,
+      customerId: d.customer?.id || null,
       planCode: (typeof d.plan === 'object' && d.plan ? d.plan.plan_code : d.plan)
         || d.plan_object?.plan_code
         || null,
@@ -419,16 +466,30 @@ export async function verifyWithProvider({ provider, reference, transactionId })
 /* Fulfilment (idempotent)                                              */
 /* ------------------------------------------------------------------ */
 
-function computeProUpdate(campaign, plan, { now, provider, reference, autoRenew, payment }) {
-  const sub = campaign.subscription || {};
-  const candidates = [now, tsToMs(sub.currentPeriodEnd)];
-  if (campaign.packageType === 'trial') candidates.push(tsToMs(campaign.trialEndsAt || campaign.endDate));
-  const base = Math.max(...candidates);
-  const extra = autoRenew ? AUTO_RENEW_BUFFER_DAYS : 0;
-  const periodEnd = base + (plan.days + extra) * DAY_MS;
-  const publicUntil = periodEnd + GRACE_DAYS * DAY_MS;
+function accountRefFor(db, campaignId) {
+  return db.collection('billing_accounts').doc(campaignId);
+}
 
-  const keepStatus = ['disabled', 'rejected'].includes(campaign.status);
+/**
+ * New Pro period after a verified payment.
+ * - Stacks on time already paid for (and on a running trial), never on the auto-renew buffer,
+ *   so monthly card renewals do not drift into free days.
+ * - Never shortens a public page that legacy hosting already paid for.
+ */
+function computeProUpdate(campaign, account, plan, { now, provider, reference, autoRenew, payment }) {
+  const sub = campaign.subscription || {};
+  const prevPaidThrough = tsToMs(sub.paidThrough) || tsToMs(sub.currentPeriodEnd);
+  const trialEnd = campaign.packageType === 'trial' ? tsToMs(campaign.trialEndsAt) : 0;
+  const base = Math.max(now, prevPaidThrough, trialEnd);
+  const paidThrough = base + plan.days * DAY_MS;
+
+  // A one-off MoMo payment made while a Paystack card subscription is running keeps that subscription on.
+  const keepsCardRenewal = !!sub.autoRenew && !!(account?.paystackPlanCode || account?.paystackSubscriptionCode);
+  const renews = !!autoRenew || keepsCardRenewal;
+  const periodEnd = paidThrough + (renews ? AUTO_RENEW_BUFFER_DAYS * DAY_MS : 0);
+  const publicUntil = Math.max(periodEnd + GRACE_DAYS * DAY_MS, tsToMs(campaign.endDate));
+
+  const keepStatus = ['disabled', 'rejected', 'suspended', 'deleted'].includes(campaign.status) || campaign.disabled === true;
   const subscription = {
     plan: 'pro',
     status: 'active',
@@ -438,19 +499,31 @@ function computeProUpdate(campaign, plan, { now, provider, reference, autoRenew,
     provider,
     currentPeriodStart: new Date(base),
     currentPeriodEnd: new Date(periodEnd),
-    lastReference: reference,
+    paidThrough: new Date(paidThrough),
     lastPaymentAt: new Date(now),
-    autoRenew: !!autoRenew,
-    paystackCustomerCode: payment?.customerCode || sub.paystackCustomerCode || null,
-    paystackPlanCode: autoRenew ? (payment?.planCode || sub.paystackPlanCode || null) : (sub.paystackPlanCode || null),
-    paystackSubscriptionCode: sub.paystackSubscriptionCode || null,
-    paystackEmailToken: sub.paystackEmailToken || null,
-    cardLast4: payment?.cardLast4 || sub.cardLast4 || null,
+    autoRenew: renews,
     updatedAt: new Date(now),
   };
 
+  const accountUpdate = {
+    campaignId: campaign.id,
+    ownerId: campaign.ownerId,
+    autoRenew: renews,
+    lastReference: reference,
+    lastPaymentAt: new Date(now),
+    updatedAt: new Date(now),
+  };
+  if (provider === 'paystack') {
+    if (payment?.customerCode) accountUpdate.paystackCustomerCode = payment.customerCode;
+    if (payment?.customerId) accountUpdate.paystackCustomerId = payment.customerId;
+    if (autoRenew && payment?.planCode) accountUpdate.paystackPlanCode = payment.planCode;
+    if (payment?.cardLast4 && payment?.channel === 'card') accountUpdate.cardLast4 = payment.cardLast4;
+  }
+
+  const startMs = tsToMs(campaign.startDate) || now;
   return {
     periodEnd,
+    accountUpdate,
     update: {
       subscription,
       packageType: 'pro',
@@ -458,11 +531,10 @@ function computeProUpdate(campaign, plan, { now, provider, reference, autoRenew,
       packagePrice: plan.amount,
       paymentVerified: true,
       status: keepStatus ? campaign.status : 'active',
-      ...(keepStatus ? {} : { disabled: false }),
-      startDate: campaign.startDate || new Date(now),
+      startDate: new Date(startMs),
       endDate: new Date(publicUntil),
       expiresAt: new Date(publicUntil),
-      durationDays: Math.round((publicUntil - tsToMs(campaign.startDate || now)) / DAY_MS),
+      durationDays: Math.round((publicUntil - startMs) / DAY_MS),
       updatedAt: new Date(now),
     },
   };
@@ -488,8 +560,8 @@ function computeSpotlightUpdate(campaign, pkg, now) {
 }
 
 /**
- * Apply a verified payment. Safe to call many times for the same reference
- * (redirect + webhook both call it).
+ * Apply a verified payment exactly once. Safe to call many times for the same reference
+ * (redirect + webhook + retries all call it): once a transaction has fulfilledAt it is final.
  */
 export async function fulfillPayment(admin, payment) {
   const { db } = admin;
@@ -502,9 +574,18 @@ export async function fulfillPayment(admin, payment) {
       return { ok: false, reason: 'unknown_reference' };
     }
     const tx = txSnap.data();
-    if (tx.status === 'success' && tx.fulfilledAt) {
+    if (tx.fulfilledAt) {
       return { ok: true, already: true, tx };
     }
+    if (tx.provider && payment.provider && tx.provider !== payment.provider) {
+      return { ok: false, reason: 'provider_mismatch' };
+    }
+
+    const campaignRef = db.collection('campaigns').doc(tx.campaignId);
+    const accountRef = accountRefFor(db, tx.campaignId);
+    const campaignSnap = await t.get(campaignRef);
+    const accountSnap = await t.get(accountRef);
+
     if ((payment.currency || '').toUpperCase() !== CURRENCY) {
       t.set(txRef, { status: 'failed', failureReason: 'currency_mismatch', updatedAt: new Date(now) }, { merge: true });
       return { ok: false, reason: 'currency_mismatch' };
@@ -513,21 +594,19 @@ export async function fulfillPayment(admin, payment) {
       t.set(txRef, { status: 'failed', failureReason: 'amount_mismatch', amountPaid: payment.amount, updatedAt: new Date(now) }, { merge: true });
       return { ok: false, reason: 'amount_mismatch' };
     }
-
-    const campaignRef = db.collection('campaigns').doc(tx.campaignId);
-    const campaignSnap = await t.get(campaignRef);
     if (!campaignSnap.exists) {
       t.set(txRef, { status: 'paid_unfulfilled', failureReason: 'campaign_missing', updatedAt: new Date(now) }, { merge: true });
       return { ok: false, reason: 'campaign_missing' };
     }
     const campaign = { id: campaignSnap.id, ...campaignSnap.data() };
+    const account = accountSnap.exists ? accountSnap.data() : null;
 
     let summary = {};
     if (tx.product === 'pro') {
       const plan = getProPlan(tx.cycle);
       if (!plan) return { ok: false, reason: 'bad_plan' };
       const autoRenew = !!tx.autoRenew && payment.provider === 'paystack' && !!payment.planCode;
-      const { periodEnd, update } = computeProUpdate(campaign, plan, {
+      const { periodEnd, update, accountUpdate } = computeProUpdate(campaign, account, plan, {
         now,
         provider: payment.provider,
         reference: payment.reference,
@@ -535,6 +614,7 @@ export async function fulfillPayment(admin, payment) {
         payment,
       });
       t.update(campaignRef, update);
+      t.set(accountRef, accountUpdate, { merge: true });
       summary = { periodEnd: new Date(periodEnd), cycle: plan.cycle };
     } else if (tx.product === 'spotlight') {
       const pkg = getSpotlightPackage(tx.variantId);
@@ -542,6 +622,8 @@ export async function fulfillPayment(admin, payment) {
       const { expiresAt, update } = computeSpotlightUpdate(campaign, pkg, now);
       t.update(campaignRef, update);
       summary = { boostExpiresAt: new Date(expiresAt) };
+    } else {
+      return { ok: false, reason: 'bad_product' };
     }
 
     t.set(txRef, {
@@ -573,51 +655,97 @@ export async function fulfillPayment(admin, payment) {
   return result;
 }
 
+/**
+ * Record that the provider says a checkout is not paid (yet) — only for a checkout we created,
+ * with the same provider, that has not been fulfilled. Never creates documents.
+ */
+export async function markCheckoutNotPaid(admin, { provider, reference, status }) {
+  if (!reference) return;
+  const ref = admin.db.collection('billing_transactions').doc(reference);
+  await admin.db.runTransaction(async (t) => {
+    const snap = await t.get(ref);
+    if (!snap.exists) return;
+    const tx = snap.data();
+    if (tx.fulfilledAt || tx.status === 'success' || tx.provider !== provider) return;
+    t.update(ref, {
+      status: status === 'abandoned' ? 'abandoned' : status === 'failed' ? 'failed' : 'pending',
+      lastCheckedAt: new Date(),
+      updatedAt: new Date(),
+    });
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /* Paystack subscription renewals (card auto-renew)                     */
 /* ------------------------------------------------------------------ */
 
-async function findAutoRenewCampaign(db, { customerCode, planCode, subscriptionCode }) {
-  let snap;
-  if (subscriptionCode) {
-    snap = await db.collection('campaigns')
-      .where('subscription.paystackSubscriptionCode', '==', subscriptionCode)
-      .limit(5).get();
-    if (!snap.empty) return snap.docs[0];
-  }
-  if (!customerCode) return null;
-  snap = await db.collection('campaigns')
-    .where('subscription.paystackCustomerCode', '==', customerCode)
-    .limit(20).get();
-  const matches = snap.docs
-    .filter((d) => {
-      const s = d.data().subscription || {};
-      return (!planCode || s.paystackPlanCode === planCode) && s.autoRenew !== false;
-    })
-    .sort((a, b) => tsToMs(a.data().subscription?.currentPeriodEnd) - tsToMs(b.data().subscription?.currentPeriodEnd));
-  return matches[0] || null;
+async function accountsWhere(db, field, value) {
+  if (!value) return [];
+  const snap = await db.collection('billing_accounts').where(field, '==', value).limit(25).get();
+  return snap.docs.map((d) => ({ id: d.id, ref: d.ref, ...d.data() }));
+}
+
+async function campaignsById(db, ids) {
+  const out = {};
+  await Promise.all(ids.map(async (id) => {
+    const snap = await db.collection('campaigns').doc(id).get();
+    if (snap.exists) out[id] = { id, ref: snap.ref, ...snap.data() };
+  }));
+  return out;
+}
+
+/** The campaign a renewal charge belongs to: same Paystack customer + plan, the one falling due first. */
+async function findRenewalCampaign(db, { customerCode, planCode }) {
+  const accounts = (await accountsWhere(db, 'paystackCustomerCode', customerCode))
+    .filter((a) => !planCode || a.paystackPlanCode === planCode);
+  if (!accounts.length) return null;
+  const campaigns = await campaignsById(db, accounts.map((a) => a.id));
+  const ranked = accounts
+    .filter((a) => campaigns[a.id])
+    .sort((a, b) => {
+      const aLinked = a.paystackSubscriptionCode && a.autoRenew !== false ? 0 : 1;
+      const bLinked = b.paystackSubscriptionCode && b.autoRenew !== false ? 0 : 1;
+      if (aLinked !== bLinked) return aLinked - bLinked;
+      return tsToMs(campaigns[a.id].subscription?.currentPeriodEnd) - tsToMs(campaigns[b.id].subscription?.currentPeriodEnd);
+    });
+  return ranked.length ? campaigns[ranked[0].id] : null;
 }
 
 /** charge.success for a renewal invoice (Paystack creates its own reference). */
 export async function fulfillPaystackRenewal(admin, payment) {
   const { db } = admin;
-  if (!payment.planCode) return { ok: false, reason: 'no_plan' };
-  const plan = Object.values({ monthly: getProPlan('monthly'), yearly: getProPlan('yearly') })
-    .find((p) => getProviderConfig().paystack.plans[p.cycle] === payment.planCode);
-  if (!plan) return { ok: false, reason: 'unknown_plan' };
+  const plans = getProviderConfig().paystack.plans;
+  const plan = [getProPlan('monthly'), getProPlan('yearly')].find((p) => p && plans[p.cycle] && plans[p.cycle] === payment.planCode);
+  const campaign = payment.planCode && plan
+    ? await findRenewalCampaign(db, { customerCode: payment.customerCode, planCode: payment.planCode })
+    : null;
 
-  const campaignDoc = await findAutoRenewCampaign(db, {
-    customerCode: payment.customerCode,
-    planCode: payment.planCode,
-  });
-  if (!campaignDoc) return { ok: false, reason: 'campaign_not_found' };
-  const campaign = { id: campaignDoc.id, ...campaignDoc.data() };
+  const txRef = db.collection('billing_transactions').doc(payment.reference);
+  if (!campaign) {
+    // Money arrived that we cannot place — keep a record for the admin and let Paystack retry.
+    await txRef.create({
+      reference: payment.reference,
+      provider: 'paystack',
+      product: 'pro',
+      amount: payment.amount,
+      amountPaid: payment.amount,
+      currency: payment.currency || CURRENCY,
+      status: 'paid_unmatched',
+      failureReason: !payment.planCode ? 'no_plan' : !plan ? 'unknown_plan' : 'campaign_not_found',
+      paystackCustomerCode: payment.customerCode || null,
+      paystackPlanCode: payment.planCode || null,
+      renewal: true,
+      createdAt: new Date(),
+    }).catch(() => {});
+    if (payment.planCode && plan) throw new Error(`renewal for ${payment.customerCode} could not be matched yet`);
+    return { ok: false, reason: 'unmatched' };
+  }
 
-  await db.collection('billing_transactions').doc(payment.reference).set({
+  // create() is idempotent across duplicate webhook deliveries; fulfillPayment then returns `already`.
+  await txRef.create({
     reference: payment.reference,
     provider: 'paystack',
     userId: campaign.ownerId,
-    email: campaign.ownerEmail || '',
     campaignId: campaign.id,
     campaignTitle: campaign.title || '',
     campaignSlug: campaign.slug || '',
@@ -631,54 +759,118 @@ export async function fulfillPaystackRenewal(admin, payment) {
     renewal: true,
     status: 'initialized',
     createdAt: new Date(),
-  }, { merge: true });
+  }).catch(async (err) => {
+    const existing = await txRef.get();
+    if (!existing.exists) throw err;
+    if (existing.data().status === 'paid_unmatched' && !existing.data().fulfilledAt) {
+      await txRef.set({
+        userId: campaign.ownerId,
+        campaignId: campaign.id,
+        campaignTitle: campaign.title || '',
+        campaignSlug: campaign.slug || '',
+        cycle: plan.cycle,
+        itemName: `${plan.name} (auto-renewal)`,
+        amount: plan.amount,
+        currency: CURRENCY,
+        autoRenew: true,
+        status: 'initialized',
+        failureReason: null,
+      }, { merge: true });
+    }
+  });
 
   return fulfillPayment(admin, payment);
 }
 
+/** subscription.create — store the subscription code + email token so auto-renew can be cancelled. */
 export async function linkPaystackSubscription(admin, data) {
-  const doc = await findAutoRenewCampaign(admin.db, {
-    customerCode: data.customer?.customer_code,
-    planCode: data.plan?.plan_code,
-  });
-  if (!doc) return { ok: false, reason: 'campaign_not_found' };
-  await doc.ref.update({
-    'subscription.paystackSubscriptionCode': data.subscription_code || null,
-    'subscription.paystackEmailToken': data.email_token || null,
-    'subscription.autoRenew': true,
-    'subscription.nextPaymentDate': data.next_payment_date ? new Date(data.next_payment_date) : null,
+  const code = data.subscription_code;
+  if (!code) return { ok: false, reason: 'no_code' };
+  const already = await accountsWhere(admin.db, 'paystackSubscriptionCode', code);
+  if (already.length) return { ok: true, already: true };
+
+  const planCode = data.plan?.plan_code;
+  const candidates = (await accountsWhere(admin.db, 'paystackCustomerCode', data.customer?.customer_code))
+    .filter((a) => a.autoRenew === true && !a.paystackSubscriptionCode && (!planCode || a.paystackPlanCode === planCode))
+    .sort((a, b) => tsToMs(b.lastPaymentAt) - tsToMs(a.lastPaymentAt));
+  if (!candidates.length) {
+    // Usually the first charge has not been applied yet — a 500 makes Paystack send this again.
+    throw new Error(`subscription ${code} has no matching campaign yet`);
+  }
+  await candidates[0].ref.set({
+    paystackSubscriptionCode: code,
+    paystackEmailToken: data.email_token || null,
+    nextPaymentDate: data.next_payment_date ? new Date(data.next_payment_date) : null,
     updatedAt: new Date(),
-  });
+  }, { merge: true });
   return { ok: true };
 }
 
+/** subscription.disable / subscription.not_renew */
 export async function markPaystackSubscriptionStopped(admin, data) {
-  const doc = await findAutoRenewCampaign(admin.db, {
-    subscriptionCode: data.subscription_code,
-    customerCode: data.customer?.customer_code,
-    planCode: data.plan?.plan_code,
-  });
-  if (!doc) return { ok: false, reason: 'campaign_not_found' };
-  await doc.ref.update({
+  let accounts = await accountsWhere(admin.db, 'paystackSubscriptionCode', data.subscription_code);
+  if (!accounts.length) {
+    accounts = (await accountsWhere(admin.db, 'paystackCustomerCode', data.customer?.customer_code))
+      .filter((a) => a.autoRenew === true && !a.paystackSubscriptionCode && a.paystackPlanCode === data.plan?.plan_code);
+  }
+  if (!accounts.length) return { ok: false, reason: 'campaign_not_found' };
+  const account = accounts[0];
+  await account.ref.set({ autoRenew: false, updatedAt: new Date() }, { merge: true });
+  await admin.db.collection('campaigns').doc(account.id).update({
     'subscription.autoRenew': false,
     updatedAt: new Date(),
-  });
+  }).catch(() => {});
   return { ok: true };
 }
 
+async function disablePaystackSubscription(secret, code, token) {
+  const { ok, data } = await providerFetch('https://api.paystack.co/subscription/disable', {
+    secret,
+    method: 'POST',
+    body: { code, token },
+  });
+  // Already-disabled subscriptions are fine.
+  if (!ok && !/already|not active|inactive/i.test(data?.message || '')) {
+    throw new HttpError(502, 'Could not cancel auto-renew with Paystack. Try again in a minute.');
+  }
+}
+
+/** Stop card auto-renew for one campaign page — at Paystack first, then locally. */
 export async function cancelAutoRenew(admin, campaign) {
-  const sub = campaign.subscription || {};
   const cfg = getProviderConfig();
-  if (sub.paystackSubscriptionCode && sub.paystackEmailToken && cfg.paystack.enabled) {
-    const { ok, data } = await providerFetch('https://api.paystack.co/subscription/disable', {
-      secret: cfg.paystack.secret,
-      method: 'POST',
-      body: { code: sub.paystackSubscriptionCode, token: sub.paystackEmailToken },
-    });
-    if (!ok || !data?.status) {
-      throw new HttpError(502, data?.message || 'Could not cancel auto-renew with Paystack. Try again.');
+  const accountRef = accountRefFor(admin.db, campaign.id);
+  const accountSnap = await accountRef.get();
+  const account = accountSnap.exists ? accountSnap.data() : {};
+
+  if (cfg.paystack.enabled && (account.paystackSubscriptionCode || account.paystackPlanCode)) {
+    if (account.paystackSubscriptionCode && account.paystackEmailToken) {
+      await disablePaystackSubscription(cfg.paystack.secret, account.paystackSubscriptionCode, account.paystackEmailToken);
+    } else if (account.paystackCustomerId) {
+      // Subscription not linked yet — look it up at Paystack and disable it there.
+      const { ok, data } = await providerFetch(
+        `https://api.paystack.co/subscription?customer=${encodeURIComponent(account.paystackCustomerId)}&perPage=50`,
+        { secret: cfg.paystack.secret },
+      );
+      if (!ok || !Array.isArray(data?.data)) {
+        throw new HttpError(502, 'Could not reach Paystack to cancel auto-renew. Try again in a minute.');
+      }
+      const linkedElsewhere = new Set(
+        (await accountsWhere(admin.db, 'paystackCustomerCode', account.paystackCustomerCode))
+          .filter((a) => a.id !== campaign.id && a.paystackSubscriptionCode)
+          .map((a) => a.paystackSubscriptionCode),
+      );
+      const targets = data.data.filter((s) => s.status === 'active'
+        && s.plan?.plan_code === account.paystackPlanCode
+        && !linkedElsewhere.has(s.subscription_code));
+      for (const s of targets) {
+        await disablePaystackSubscription(cfg.paystack.secret, s.subscription_code, s.email_token);
+      }
+    } else if (campaign.subscription?.autoRenew) {
+      throw new HttpError(409, 'Auto-renew is still being set up. Try again in a few minutes.');
     }
   }
+
+  await accountRef.set({ autoRenew: false, updatedAt: new Date() }, { merge: true });
   await admin.db.collection('campaigns').doc(campaign.id).update({
     'subscription.autoRenew': false,
     updatedAt: new Date(),

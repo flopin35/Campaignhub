@@ -3,30 +3,56 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    function isVerifiedUser() {
+    function signedIn() {
       return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'daakukwaku7@gmail.com';
     }
 
     function isImage() {
       return request.resource != null
-        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
     }
 
-    // Campaign assets — public read, verified users only write
+    /** New uploads are named "<uid>-<random>-<label>.<ext>" so nobody can overwrite another campaign's images. */
+    function ownsFileName(fileName) {
+      return fileName.matches('^' + request.auth.uid + '-[A-Za-z0-9_-]+\\.(jpg|jpeg|png|webp)$');
+    }
+
+    // Campaign banners, logos and gallery — public read; create-only by the uploader.
+    match /campaigns/{folder}/{fileName} {
+      allow read: if true;
+      allow create: if isVerifiedUser()
+        && folder in ['banners', 'logos', 'gallery']
+        && isImage()
+        && ownsFileName(fileName);
+      allow update, delete: if false;
+    }
+
+    // Older images stored deeper under campaigns/ stay readable.
     match /campaigns/{allPaths=**} {
       allow read: if true;
-      allow write: if isVerifiedUser() && isImage();
     }
 
-    match /payments/screenshots/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if isVerifiedUser() && isImage();
-    }
-
-    match /payments/proofs/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if isVerifiedUser() && isImage();
+    // MoMo screenshots (legacy premium proofs and donation proofs) — admin only; links already
+    // saved on records keep working because download URLs carry their own token.
+    match /payments/{folder}/{fileName} {
+      // the uploader can fetch their own file's link; nobody else can list or read proofs
+      allow get: if isAdmin() || (signedIn() && fileName.matches('^' + request.auth.uid + '-.*'));
+      allow list: if isAdmin();
+      allow create: if signedIn()
+        && folder in ['screenshots', 'proofs']
+        && request.resource.size <= 1 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)')
+        && ownsFileName(fileName);
+      allow update, delete: if isAdmin();
     }
 
     match /users/avatars/{userId}/{fileName} {

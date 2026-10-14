@@ -4,7 +4,7 @@ function escapeCell(value) {
   if (value == null) return '';
   const s = Array.isArray(value) ? value.join('; ') : String(value);
   // Neutralise spreadsheet formula injection
-  const safe = /^[=+\-@]/.test(s) ? `'${s}` : s;
+  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
@@ -27,6 +27,20 @@ export function downloadCsv(filename, rows, columns) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Excel in some locales saves with ';', some exports use tabs — pick the one used in the header row. */
+function detectDelimiter(src) {
+  const firstLine = src.split(/\r?\n/, 1)[0] || '';
+  const counts = { ',': 0, ';': 0, '\t': 0 };
+  let quoted = false;
+  for (const ch of firstLine) {
+    if (ch === '"') quoted = !quoted;
+    else if (!quoted && ch in counts) counts[ch] += 1;
+  }
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][1] > 0
+    ? Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+    : ',';
+}
+
 /** Parse CSV text into an array of objects keyed by lower-cased header. */
 export function parseCsv(text) {
   const rows = [];
@@ -34,6 +48,7 @@ export function parseCsv(text) {
   let cell = '';
   let quoted = false;
   const src = String(text || '').replace(/^﻿/, '');
+  const delimiter = detectDelimiter(src);
 
   for (let i = 0; i < src.length; i += 1) {
     const ch = src[i];
@@ -50,7 +65,7 @@ export function parseCsv(text) {
       }
     } else if (ch === '"') {
       quoted = true;
-    } else if (ch === ',' || ch === ';' || ch === '\t') {
+    } else if (ch === delimiter) {
       row.push(cell);
       cell = '';
     } else if (ch === '\n' || ch === '\r') {

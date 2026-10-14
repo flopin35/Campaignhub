@@ -17,17 +17,19 @@ import {
   Zap,
   CircleCheck,
   X,
+  Rocket,
 } from 'lucide-react';
 import { db } from '../firebase/auth';
+import AdminSetup from './AdminSetup';
 import { useAdminCampaigns } from '../hooks/useCampaigns';
 import { useToast } from '../context/ToastContext';
 import { Card, CardHeader, Button, Badge, PageHeader, Tabs, EmptyState, Modal, Segmented } from '../components/ui';
 import { StatTile } from '../components/charts';
-import { adminGrantPro, adminEndPro, subscribeBillingTransactions } from '../services/adminService';
-import { deleteCampaign, toggleFeatured, toggleCampaignDisabled } from '../services/campaignFirestoreService';
+import { adminGrantPro, adminEndPro, adminMarkLegacyPaymentVerified, subscribeBillingTransactions } from '../services/adminService';
+import { deleteCampaign, toggleFeatured, adminSetSuspended } from '../services/campaignFirestoreService';
 import { verifyCampaign } from '../services/verificationService';
 import { clearCampaignBoost } from '../services/boostService';
-import { verifyPremiumPayment, verifyPaymentAndActivate, rejectPayment } from '../services/paymentService';
+import { rejectPayment } from '../services/paymentService';
 import { subscribeReports, resolveReport } from '../services/reportService';
 import { getBillingState, toMs, formatCedis } from '../utils/billing';
 import { isCampaignVisible, isBoostActive } from '../utils/campaignHelpers';
@@ -40,7 +42,14 @@ export default function AdminDashboard() {
   const [legacy, setLegacy] = useState([]);
   const [reports, setReports] = useState([]);
 
+  const [emails, setEmails] = useState({});
   useEffect(() => subscribeBillingTransactions(setTxs), []);
+  // Owner e-mails live on private user profiles (not on the public campaign document).
+  useEffect(() => {
+    getDocs(collection(db, 'users'))
+      .then((snap) => setEmails(Object.fromEntries(snap.docs.map((d) => [d.id, d.data().email || '']))))
+      .catch(() => setEmails({}));
+  }, []);
   useEffect(() => subscribeReports(setReports), []);
   useEffect(() => {
     getDocs(query(collection(db, 'payments'), where('paymentStatus', '==', 'pending_review')))
@@ -67,7 +76,7 @@ export default function AdminDashboard() {
     };
   }, [campaigns, txs]);
 
-  const openReports = reports.filter((r) => (r.status || 'open') === 'open');
+  const openReports = reports.filter(isOpenReport);
 
   return (
     <div className="animate-fade-up">
@@ -86,19 +95,21 @@ export default function AdminDashboard() {
           { value: 'payments', label: 'Payments', icon: Receipt, count: txs.length },
           { value: 'legacy', label: 'Manual MoMo proofs', icon: Wallet, count: legacy.length },
           { value: 'reports', label: 'Reports', icon: Flag, count: openReports.length },
+          { value: 'setup', label: 'Setup', icon: Rocket },
         ]}
       />
       <div className="mt-6">
-        {tab === 'campaigns' && <CampaignsTable campaigns={campaigns} loading={loading} />}
+        {tab === 'campaigns' && <CampaignsTable campaigns={campaigns} loading={loading} emails={emails} />}
         {tab === 'payments' && <PaymentsTable txs={txs} />}
         {tab === 'legacy' && <LegacyPayments payments={legacy} campaigns={campaigns} onDone={(id) => setLegacy((l) => l.filter((p) => p.id !== id))} />}
         {tab === 'reports' && <ReportsList reports={reports} campaigns={campaigns} />}
+        {tab === 'setup' && <AdminSetup />}
       </div>
     </div>
   );
 }
 
-function CampaignsTable({ campaigns, loading }) {
+function CampaignsTable({ campaigns, loading, emails = {} }) {
   const { toast } = useToast();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
@@ -112,7 +123,7 @@ function CampaignsTable({ campaigns, loading }) {
     if (filter === 'lapsed' && !['grace', 'expired', 'trial_ended', 'unpaid'].includes(b.state)) return false;
     if (q) {
       const t = q.toLowerCase();
-      return `${c.title} ${c.ownerName} ${c.ownerEmail} ${c.slug} ${c.constituency}`.toLowerCase().includes(t);
+      return `${c.title} ${c.ownerName} ${emails[c.ownerId] || c.ownerEmail || ''} ${c.slug} ${c.constituency}`.toLowerCase().includes(t);
     }
     return true;
   });
@@ -173,7 +184,7 @@ function CampaignsTable({ campaigns, loading }) {
                     </td>
                     <td className="text-sm">
                       {c.ownerName || '—'}
-                      <span className="block text-xs text-ink-3">{c.ownerEmail}</span>
+                      <span className="block text-xs text-ink-3">{emails[c.ownerId] || c.ownerEmail || ''}</span>
                     </td>
                     <td>
                       <Badge tone={b.tone}>{b.label}</Badge>
@@ -187,12 +198,22 @@ function CampaignsTable({ campaigns, loading }) {
                         <IconBtn title={c.verified ? 'Remove verified badge' : 'Verify page'} icon={BadgeCheck} active={c.verified} onClick={() => act(c, () => verifyCampaign(c.id, !c.verified, c.ownerId, c.title), c.verified ? 'Badge removed' : 'Page verified')} />
                         <IconBtn title={c.featured ? 'Unfeature' : 'Feature'} icon={Star} active={c.featured} onClick={() => act(c, () => toggleFeatured(c.id, !c.featured))} />
                         {isBoostActive(c) && <IconBtn title="Clear Spotlight" icon={Zap} onClick={() => act(c, () => clearCampaignBoost(c.id, c), 'Spotlight cleared')} />}
-                        <IconBtn title={c.disabled ? 'Unhide' : 'Hide from public'} icon={c.disabled ? Eye : EyeOff} onClick={() => act(c, () => toggleCampaignDisabled(c.id, !c.disabled))} />
+                        {(() => {
+                          const suspended = c.status === 'suspended' || (c.disabled && c.status === 'active');
+                          return (
+                            <IconBtn
+                              title={suspended ? 'Restore page (lift suspension)' : 'Suspend page (owner cannot undo)'}
+                              icon={suspended ? Eye : EyeOff}
+                              active={suspended}
+                              onClick={() => act(c, () => adminSetSuspended(c, !suspended), suspended ? 'Page restored' : 'Page suspended')}
+                            />
+                          );
+                        })()}
                         <IconBtn
-                          title="Delete"
+                          title="Delete page and all its data"
                           icon={Trash2}
                           danger
-                          onClick={() => window.confirm(`Delete "${c.title}" permanently?`) && act(c, () => deleteCampaign(c.id), 'Deleted')}
+                          onClick={() => window.confirm(`Delete "${c.title}" permanently?\n\nThis also erases its voter list, volunteers, donations, events, ads and results. It cannot be undone.`) && act(c, () => deleteCampaign(c.id), 'Deleted')}
                         />
                       </div>
                     </td>
@@ -222,7 +243,7 @@ function IconBtn({ icon: Icon, title, onClick, active, danger }) {
   );
 }
 
-function GrantDialog({ campaign, onClose }) {
+function GrantDialog({ campaign, onClose, onGranted, intro }) {
   const { toast } = useToast();
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState(false);
@@ -250,11 +271,19 @@ function GrantDialog({ campaign, onClose }) {
         <>
           {b.state === 'active' && <Button variant="danger-ghost" className="mr-auto" onClick={() => run(() => adminEndPro(campaign), 'Pro ended')} disabled={busy}>End Pro now</Button>}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => run(() => adminGrantPro(campaign, days), `Granted ${days} days of Pro`)} loading={busy}>Grant {days} days</Button>
+          <Button
+            onClick={() => run(async () => {
+              await adminGrantPro(campaign, days);
+              await onGranted?.(days);
+            }, `Granted ${days} days of Pro`)}
+            loading={busy}
+          >
+            Grant {days} days
+          </Button>
         </>
       }
     >
-      <p className="text-sm text-ink-2 mb-4">Use this for bank transfers, offline MoMo payments or partner deals. Days are added on top of any remaining time.</p>
+      <p className="text-sm text-ink-2 mb-4">{intro || 'Use this for bank transfers, offline MoMo payments or partner deals. Days are added on top of any remaining time.'}</p>
       <Segmented value={days} onChange={setDays} options={[{ value: 7, label: '7 days' }, { value: 30, label: '30 days' }, { value: 90, label: '90 days' }, { value: 365, label: '1 year' }]} />
     </Modal>
   );
@@ -298,27 +327,19 @@ function PaymentsTable({ txs }) {
 
 function LegacyPayments({ payments, campaigns, onDone }) {
   const { toast } = useToast();
+  const [granting, setGranting] = useState(null);
   const byId = Object.fromEntries(campaigns.map((c) => [c.id, c]));
   if (!payments.length) {
     return <Card><EmptyState icon={CircleCheck} title="No manual proofs waiting" text="New customers pay through Paystack or Flutterwave. Old MoMo screenshot proofs appear here." /></Card>;
   }
-  const approve = async (p) => {
-    const campaign = byId[p.campaignId];
-    if (!campaign) {
+  // Durations on old proof records were typed in by the customer's browser — never trust them.
+  // Check the MoMo statement, then choose how many days of Pro the amount buys.
+  const approve = (p) => {
+    if (!byId[p.campaignId]) {
       toast('Campaign not found', 'error');
       return;
     }
-    try {
-      if (p.purchaseType === 'premium' || p.purchaseType === 'hosting') {
-        await verifyPremiumPayment({ paymentId: p.id, campaignId: p.campaignId, payment: p, campaign });
-      } else {
-        await verifyPaymentAndActivate({ paymentId: p.id, campaignId: p.campaignId, campaign, payment: p });
-      }
-      toast('Payment verified', 'success');
-      onDone(p.id);
-    } catch (err) {
-      toast(err.message, 'error');
-    }
+    setGranting(p);
   };
   const reject = async (p) => {
     try {
@@ -331,22 +352,38 @@ function LegacyPayments({ payments, campaigns, onDone }) {
   };
   return (
     <div className="grid md:grid-cols-2 gap-4">
+      {granting && (
+        <GrantDialog
+          campaign={byId[granting.campaignId]}
+          intro={`Proof: ${formatCedis(granting.amount)} · ref ${granting.paymentReference}. Confirm the money is in your MoMo statement, then grant the matching time (₵120 = 30 days, ₵1,200 = 1 year).`}
+          onClose={() => setGranting(null)}
+          onGranted={async (days) => {
+            await adminMarkLegacyPaymentVerified(granting.id, days);
+            onDone(granting.id);
+          }}
+        />
+      )}
       {payments.map((p) => (
         <Card key={p.id}>
           <CardHeader title={`${formatCedis(p.amount)} · ${p.packageName}`} subtitle={`${byId[p.campaignId]?.title || p.campaignId} · Ref ${p.paymentReference}`} />
-          {p.screenshotUrl && (
-            <a href={p.screenshotUrl} target="_blank" rel="noreferrer">
+          {/^https:\/\//i.test(p.screenshotUrl || '') && (
+            <a href={p.screenshotUrl} target="_blank" rel="noopener noreferrer">
               <img src={p.screenshotUrl} alt="Payment proof" className="max-h-56 rounded-xl border border-line" loading="lazy" />
             </a>
           )}
           <div className="flex gap-2 mt-4">
-            <Button size="sm" icon={CircleCheck} onClick={() => approve(p)}>Verify</Button>
+            <Button size="sm" icon={CircleCheck} onClick={() => approve(p)}>Verify &amp; grant Pro</Button>
             <Button size="sm" variant="ghost" icon={X} onClick={() => reject(p)}>Reject</Button>
           </div>
         </Card>
       ))}
     </div>
   );
+}
+
+/** reportService creates reports with status 'pending'; older ones may say 'open' or nothing. */
+function isOpenReport(r) {
+  return ['open', 'pending'].includes(r.status || 'open');
 }
 
 function ReportsList({ reports, campaigns }) {
@@ -359,11 +396,11 @@ function ReportsList({ reports, campaigns }) {
         {reports.map((r) => (
           <li key={r.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-ink">{r.reason} <Badge tone={(r.status || 'open') === 'open' ? 'warning' : 'neutral'}>{r.status || 'open'}</Badge></p>
+              <p className="text-sm font-medium text-ink">{r.reason} <Badge tone={isOpenReport(r) ? 'warning' : 'neutral'}>{isOpenReport(r) ? 'open' : r.status}</Badge></p>
               <p className="text-xs text-ink-3 mt-0.5">{byId[r.campaignId]?.title || r.campaignId} · {timeAgo(r.createdAt)}</p>
               {r.details && <p className="text-sm text-ink-2 mt-1">{r.details}</p>}
             </div>
-            {(r.status || 'open') === 'open' && (
+            {isOpenReport(r) && (
               <div className="flex gap-2">
                 <Button size="sm" variant="secondary" onClick={() => resolveReport(r.id, 'resolved').then(() => toast('Resolved', 'success'))}>Resolve</Button>
                 <Button size="sm" variant="ghost" onClick={() => resolveReport(r.id, 'dismissed').then(() => toast('Dismissed', 'info'))}>Dismiss</Button>

@@ -42,3 +42,9 @@ extensionService.js, followService.js, premiumService.js
 
 ## utils/
 contentQuality.js, featureAccess.js, helpers.js
+
+## Retired API routes
+`frontend/api/ask-ai.js` and `frontend/api/recommendations.js` now only answer
+"410 Gone" (they had no sign-in or limits). AI writing lives in
+`frontend/api/ai-studio.js`. You can delete the two files and the unused `ask`
+helpers at the top of `src/services/aiService.js`.

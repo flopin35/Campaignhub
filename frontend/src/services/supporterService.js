@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/auth';
 import { createNotification } from './notificationService';
-import { normalizePhone } from '../utils/format';
+import { normalizePhone, isValidPhone } from '../utils/format';
 
 const SUPPORTERS = 'supporters';
 
@@ -59,19 +59,21 @@ export async function registerSupporter({
   notes = '',
   fieldToken = '',
 }) {
+  if (!String(name || '').trim()) throw new Error('Enter your name.');
+  if (!isValidPhone(phone)) throw new Error('Enter a valid phone number (e.g. 024 123 4567).');
   const payload = {
     campaignId,
     userId,
-    name: name.trim(),
+    name: String(name).trim().slice(0, 120),
     phone: normalizePhone(phone),
-    email: email.trim(),
-    region,
-    constituency,
+    email: String(email || '').trim().slice(0, 160),
+    region: String(region || '').slice(0, 80),
+    constituency: String(constituency || '').slice(0, 120),
     pollingStation: String(pollingStation || '').trim().slice(0, 120),
-    supportLevel,
-    interests,
+    supportLevel: ['strong', 'leaning', 'undecided', 'opposed', 'unknown'].includes(supportLevel) ? supportLevel : 'unknown',
+    interests: Array.isArray(interests) ? interests.slice(0, 12) : [],
     isVolunteer,
-    adCode: adCode || '',
+    adCode: String(adCode || '').slice(0, 12),
     collectedBy: String(collectedBy || '').slice(0, 80),
     fieldToken: fieldToken || '',
     notes: String(notes || '').slice(0, 1000),
@@ -96,7 +98,7 @@ export async function registerSupporter({
   if (ownerId && source !== 'field') {
     await createNotification({
       userId: ownerId,
-      message: `New supporter: ${name}${region ? ` (${region})` : ''} signed up on "${campaignTitle}"`,
+      message: `New supporter: ${payload.name}${payload.region ? ` (${payload.region})` : ''} signed up on "${campaignTitle}"`.slice(0, 300),
       type: 'new_supporter',
       campaignId,
     }).catch(() => {});

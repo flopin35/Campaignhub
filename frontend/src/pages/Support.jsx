@@ -9,6 +9,7 @@ const FAQ = [
   ['How do I cancel?', 'MoMo payments are prepaid — simply don’t renew. If you turned on card auto-renew, open Plan & billing in your campaign and choose “Turn off auto-renew”. Pro stays active until the end of the period you paid for.'],
   ['Can you import my existing voter list?', 'Yes. Use Voters → Import with a CSV saved from Excel or Google Sheets. If your list is messy or very large, email it to us and we will help.'],
   ['Someone created a fake page in my name', 'Report it below with the link to the fake page. We review reports quickly, can hide impersonation pages, and verify genuine campaigns with a blue badge.'],
+  ['How do I disconnect Facebook ads?', 'Open your campaign → Ads → the ••• menu on the Facebook & Instagram card → Disconnect. You can also remove CampaignHub in Facebook under Settings → Business integrations; we then delete the connection automatically.'],
   ['Who can see my voters and results?', 'Only you (the campaign owner). Field and polling-agent links can add entries but cannot read your data. You can export or delete your data at any time.'],
   ['Do you support every party?', 'Yes. CampaignHub is non-partisan. We serve candidates from every party and independents.'],
 ];
@@ -16,6 +17,7 @@ const FAQ = [
 export default function Support() {
   const [params] = useSearchParams();
   const reported = params.get('report');
+  const metaDeletion = (params.get('meta-deletion') || '').replace(/[^A-Z0-9-]/gi, '').slice(0, 40);
   const reportMail = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Report: ${reported || 'campaign page'}`)}&body=${encodeURIComponent(`Page: ${reported ? `${window.location.origin}/campaign/${reported}` : ''}\n\nWhat is wrong with this page?\n`)}`;
 
   return (
@@ -23,6 +25,13 @@ export default function Support() {
       <p className="eyebrow">Support</p>
       <h1 className="mt-3 text-3xl sm:text-4xl font-extrabold text-ink">How can we help?</h1>
       <p className="mt-3 text-lg text-ink-2 max-w-2xl">Real people in Ghana reply to every message — usually the same day.</p>
+
+      {metaDeletion && (
+        <Alert className="mt-8" tone="success" icon={ShieldCheck} title="Facebook data deletion complete">
+          Request {metaDeletion}: CampaignHub has deleted the Facebook connection and every piece of ad-account data it held for you.
+          Keep this code if you need to contact us about it.
+        </Alert>
+      )}
 
       {reported && (
         <Alert className="mt-8" tone="warning" icon={Flag} title={`Report /campaign/${reported}`} action={<Button size="sm" href={reportMail}>Send report</Button>}>

@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   getDoc,
@@ -21,6 +22,8 @@ import { normalizeCampaign, addDays, toDate, sortCampaignsForDisplay, normalizeS
 import { uploadBanner, uploadLogo } from './storageService';
 import { auth, isAdmin } from '../firebase/auth';
 import { isUserVerified, getUserProfile } from './authService';
+import { getBillingConfig, serverNow, cancelAutoRenew } from './billingService';
+import { disconnectMeta } from './metaService';
 
 const CAMPAIGNS = 'campaigns';
 
@@ -138,7 +141,8 @@ export async function createCampaign({ form, bannerFile, logoFile, owner, useTri
   }
   onUploadProgress?.(94, 'Saving campaign…');
 
-  const now = Date.now();
+  if (useTrial) await getBillingConfig().catch(() => null); // syncs clock with the server for the trial dates
+  const now = serverNow();
   const ref = doc(collection(db, CAMPAIGNS));
   const title = (form.title || form.candidateName || 'Campaign').trim();
   const slug = resolveUniqueSlug(title);
@@ -170,7 +174,6 @@ export async function createCampaign({ form, bannerFile, logoFile, owner, useTri
     sections: { volunteer: true, donate: false, events: true, poll: false },
     ownerId: owner.uid,
     ownerName: owner.name || '',
-    ownerEmail: owner.email || '',
     billingVersion: 2,
     verified: false,
     paymentVerified: false,
@@ -223,9 +226,12 @@ export async function createCampaign({ form, bannerFile, logoFile, owner, useTri
     await batch.commit();
   } catch (err) {
     if (err.code === 'permission-denied') {
-      throw new Error(useTrial
+      const profileNow = await getUserProfile(currentUser.uid).catch(() => null);
+      throw new Error(useTrial && profileNow?.trialCampaignId
         ? 'Your free trial has already been used on this account. Create the page and subscribe to publish it.'
-        : 'Permission denied — sign in again or contact support.');
+        : useTrial
+          ? 'We couldn’t start your free trial. Check that your phone’s date and time are set automatically, then try again.'
+          : 'Permission denied — sign out, sign in again and retry.');
     }
     throw err;
   }
@@ -236,21 +242,30 @@ export async function createCampaign({ form, bannerFile, logoFile, owner, useTri
 /** Start the account's one free trial on an existing (legacy or unpaid) campaign page. */
 export async function startTrialForCampaign(campaign, uid) {
   if (!campaign?.id || !uid) throw new Error('Missing campaign');
-  const now = Date.now();
+  if (campaign.disabled || ['suspended', 'rejected', 'deleted'].includes(campaign.status)) {
+    throw new Error('This page is on hold. Contact support to reactivate it.');
+  }
+  await auth.currentUser?.getIdToken(true);
+  await getBillingConfig().catch(() => null);
+  const now = serverNow();
   const trialEndsAt = new Date(now + TRIAL_MS);
-  const endDate = new Date(now + TRIAL_MS + GRACE_MS);
-  const batch = writeBatch(db);
-  batch.update(doc(db, CAMPAIGNS, campaign.id), {
+  const trialPublicUntil = now + TRIAL_MS + GRACE_MS;
+  const existingEnd = toDate(campaign.endDate)?.getTime() || 0;
+  const patch = {
     packageType: 'trial',
     packageName: 'Free trial',
     status: 'active',
-    disabled: false,
     startDate: Timestamp.fromDate(new Date(now)),
     trialEndsAt: Timestamp.fromDate(trialEndsAt),
-    endDate: Timestamp.fromDate(endDate),
-    expiresAt: Timestamp.fromDate(endDate),
     updatedAt: serverTimestamp(),
-  });
+  };
+  // Never shorten hosting a legacy customer already paid for: leave a later end date untouched.
+  if (existingEnd <= trialPublicUntil) {
+    patch.endDate = Timestamp.fromDate(new Date(trialPublicUntil));
+    patch.expiresAt = patch.endDate;
+  }
+  const batch = writeBatch(db);
+  batch.update(doc(db, CAMPAIGNS, campaign.id), patch);
   batch.set(doc(db, 'users', uid), {
     trialCampaignId: campaign.id,
     trialStartedAt: serverTimestamp(),
@@ -260,7 +275,10 @@ export async function startTrialForCampaign(campaign, uid) {
     await batch.commit();
   } catch (err) {
     if (err.code === 'permission-denied') {
-      throw new Error('Your account has already used its free trial. Choose a plan to continue.');
+      const profile = await getUserProfile(uid).catch(() => null);
+      throw new Error(profile?.trialCampaignId
+        ? 'Your account has already used its free trial. Choose a plan to continue.'
+        : 'We couldn’t start your free trial. Check that your device’s date and time are set automatically, verify your email, then try again.');
     }
     throw err;
   }
@@ -315,7 +333,17 @@ export async function getCampaignBySlug(slug) {
   );
   const snap = await getDocs(q);
   if (snap.empty) return null;
-  return normalizeCampaign(snap.docs[0]);
+  return pickCampaignForSlug(snap.docs.map(normalizeCampaign));
+}
+
+/**
+ * Several documents can carry the same slug (someone may copy a rival's link name).
+ * The page created first wins — createdAt is set by the server and cannot be back-dated.
+ */
+export function pickCampaignForSlug(campaigns = []) {
+  const ms = (c) => toDate(c.createdAt)?.getTime() || Number.MAX_SAFE_INTEGER;
+  const sorted = [...campaigns].sort((a, b) => ms(a) - ms(b));
+  return sorted.find((c) => !c.disabled) || sorted[0] || null;
 }
 
 /**
@@ -385,20 +413,75 @@ export async function rejectCampaign(campaignId, reason = '') {
   });
 }
 
-export async function deleteCampaign(campaignId) {
+const CAMPAIGN_DATA_COLLECTIONS = [
+  'supporters', 'volunteers', 'campaign_events', 'ad_campaigns', 'polling_stations',
+  'field_links', 'election_results', 'poll_responses', 'broadcasts',
+];
+
+/**
+ * Remove the voter data and tools linked to a campaign (privacy — Ghana Data Protection Act).
+ * Small batches: every delete is checked against the campaign owner by the security rules.
+ */
+export async function purgeCampaignData(campaignId, { includeDonations = false, onProgress } = {}) {
+  const names = includeDonations ? [...CAMPAIGN_DATA_COLLECTIONS, 'donations'] : CAMPAIGN_DATA_COLLECTIONS;
+  let removed = 0;
+  for (const name of names) {
+    let snap;
+    try {
+      snap = await getDocs(query(collection(db, name), where('campaignId', '==', campaignId)));
+    } catch {
+      continue;
+    }
+    const refs = snap.docs.map((d) => d.ref);
+    for (let i = 0; i < refs.length; i += 10) {
+      const batch = writeBatch(db);
+      refs.slice(i, i + 10).forEach((r) => batch.delete(r));
+      await batch.commit().catch(() => {});
+      removed += Math.min(10, refs.length - i);
+      onProgress?.(removed);
+    }
+  }
+  return removed;
+}
+
+/**
+ * Owner: archive the page (status 'deleted'), stop card auto-renew and erase its voter data.
+ * Admin: also removes the document itself (a tombstone in analytics/ stops the id being re-used).
+ */
+export async function deleteCampaign(campaignId, { onProgress } = {}) {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('You must be signed in to delete a campaign');
 
   const ref = doc(db, CAMPAIGNS, campaignId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Campaign not found');
-  const isOwner = snap.data().ownerId === currentUser.uid;
-  if (!isOwner && !isAdmin(currentUser)) {
+  const data = snap.data();
+  const owner = data.ownerId === currentUser.uid;
+  const admin = isAdmin(currentUser);
+  if (!owner && !admin) {
     throw new Error('You can only delete your own campaigns');
   }
 
+  if (data.subscription?.autoRenew) {
+    await cancelAutoRenew(campaignId);
+  }
+  // Forget any connected Facebook ad account (revokes CampaignHub's access at Meta).
+  await disconnectMeta(campaignId).catch(() => {});
+
   try {
-    await deleteDoc(ref);
+    if (admin) {
+      await purgeCampaignData(campaignId, { includeDonations: true, onProgress });
+      await setDoc(doc(db, 'analytics', campaignId), { campaignId, deletedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+      await deleteDoc(ref);
+    } else {
+      await updateDoc(ref, {
+        status: 'deleted',
+        disabled: true,
+        deletedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await purgeCampaignData(campaignId, { onProgress });
+    }
   } catch (err) {
     if (err.code === 'permission-denied') {
       throw new Error('Permission denied — you cannot delete this campaign.');
@@ -477,6 +560,29 @@ export async function toggleSpotlight(campaignId, spotlight) {
   });
 }
 
+/** Admin takedown. Uses status 'suspended' so the owner cannot undo it (and public queries stay provable). */
+export async function adminSetSuspended(campaign, suspend) {
+  const ref = doc(db, CAMPAIGNS, campaign.id);
+  if (suspend) {
+    await updateDoc(ref, {
+      status: 'suspended',
+      disabled: true,
+      suspendedFromStatus: campaign.status === 'suspended' ? campaign.suspendedFromStatus || 'active' : campaign.status || 'active',
+      suspendedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+  const back = campaign.status === 'suspended' ? campaign.suspendedFromStatus || 'active' : campaign.status;
+  await updateDoc(ref, {
+    status: back === 'suspended' ? 'active' : back,
+    disabled: back === 'disabled',
+    suspendedAt: null,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** @deprecated kept for older callers — use adminSetSuspended */
 export async function toggleCampaignDisabled(campaignId, disabled) {
   await updateDoc(doc(db, CAMPAIGNS, campaignId), {
     disabled,

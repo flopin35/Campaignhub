@@ -26,6 +26,7 @@ import { GHANA_REGIONS } from '../../data/ghanaRegions';
 import { sectionPath } from '../../data/workspaceNav';
 import { cedis, formatNumber, percent, formatDateTime } from '../../utils/format';
 import { isCampaignVisible, isBoostActive } from '../../utils/campaignHelpers';
+import MetaAdsPanel from './MetaAdsPanel';
 
 const channelLabel = (id) => AD_CHANNELS.find((c) => c.id === id)?.label || id;
 
@@ -95,9 +96,12 @@ function AdsManager() {
 
   const live = isCampaignVisible(campaign);
   const boosted = isBoostActive(campaign);
+  const signupsForMeta = useMemo(() => Object.fromEntries(rows.map((r) => [r.code, r.signups])), [rows]);
 
   return (
     <div className="space-y-6">
+      <MetaAdsPanel campaign={campaign} trackedAds={ads} signupsByCode={signupsForMeta} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile label="Ad spend" value={cedis(totals.spent)} icon={Wallet} sub={totals.budget ? `of ${cedis(totals.budget)} budget` : 'Log spend per ad'} />
         <StatTile label="Visits from ads" value={formatNumber(totals.visits)} icon={MousePointerClick} sub="Tracked link & QR scans" />

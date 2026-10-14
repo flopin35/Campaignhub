@@ -223,7 +223,10 @@ export function CreateLinkDialog({ open, onClose, campaign, mode = 'canvass', in
       agentName: initial?.agentName || station?.agentName || '',
       agentPhone: initial?.agentPhone || station?.agentPhone || '',
     });
-  }, [open, initial, station]);
+    // Only when the dialog opens: a live update of the links list (e.g. the link just created)
+    // must not wipe the form or hide the new link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const name = form.agentName;
   const phone = form.agentPhone;

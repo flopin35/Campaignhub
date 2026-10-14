@@ -1,0 +1,9 @@
+# Never upload secrets when deploying from this computer
+*firebase-adminsdk*.json
+*serviceAccount*.json
+.env
+.env.*
+!.env.example
+node_modules
+dist
+backend/uploads

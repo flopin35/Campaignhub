@@ -6,7 +6,6 @@
  *   POST run-upgrade     → one-time data check / clean-up ({ apply, strip })
  *   POST create-plans    → create the ₵120 monthly / ₵1,200 yearly Paystack plans for card auto-renew
  */
-import { getApps } from 'firebase-admin/app';
 import {
   HttpError,
   applyCors,
@@ -16,8 +15,8 @@ import {
   requireUser,
 } from '../_lib/billing.js';
 import { loadRuntimeConfig, settingSource, RUNTIME_KEYS } from '../_lib/runtimeConfig.js';
-import { FIRESTORE_RULES, STORAGE_RULES } from '../_lib/rulesSource.js';
 import { runUpgrade } from '../_lib/upgradeData.js';
+import { publishRules, RULES_HASH } from '../_lib/autoSetup.js';
 
 const FORMATS = {
   APP_URL: /^https:\/\/[^\s/]+$/,
@@ -95,7 +94,8 @@ export default async function handler(req, res) {
           settings,
           adminSdk: true,
           setup: {
-            rulesDeployedAt: setup.rulesDeployedAt?.toMillis?.() || null,
+            rulesDeployedAt: setup.rulesHash === RULES_HASH ? setup.rulesDeployedAt?.toMillis?.() || null : null,
+            rulesError: setup.rulesHash === RULES_HASH ? null : setup.rulesError || null,
             upgradeAppliedAt: setup.upgradeAppliedAt?.toMillis?.() || null,
             plansCreatedAt: setup.plansCreatedAt?.toMillis?.() || null,
           },
@@ -138,18 +138,13 @@ export default async function handler(req, res) {
     }
 
     if (action === 'deploy-rules') {
-      const { getSecurityRules } = await import('firebase-admin/security-rules');
-      const app = getApps()[0];
-      const projectId = app?.options?.credential?.projectId || process.env.FIREBASE_PROJECT_ID || 'new1-e94db';
-      const bucket = process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || `${projectId}.firebasestorage.app`;
-      const rules = getSecurityRules(app);
+      let bucket;
       try {
-        await rules.releaseFirestoreRulesetFromSource(FIRESTORE_RULES);
-        await rules.releaseStorageRulesetFromSource(STORAGE_RULES, bucket);
+        bucket = await publishRules();
       } catch (err) {
         throw new HttpError(502, `Firebase refused the rules: ${String(err.message || err).slice(0, 300)}`);
       }
-      await setupRef.set({ rulesDeployedAt: new Date() }, { merge: true });
+      await setupRef.set({ rulesDeployedAt: new Date(), rulesHash: RULES_HASH, rulesError: null }, { merge: true });
       return sendJson(res, 200, { success: true, data: { deployed: true, bucket } });
     }
 

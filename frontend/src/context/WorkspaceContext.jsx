@@ -15,6 +15,7 @@ import {
   subscribeTransactions,
 } from '../services/workspaceService';
 import { getBillingState } from '../utils/billing';
+import { getBillingConfig } from '../services/billingService';
 import { useAuth } from './AuthContext';
 
 /* ------------------------------------------------------------------ */
@@ -75,6 +76,11 @@ export function WorkspaceProvider({ campaignId, children, mock }) {
   const [data, setData] = useState(mock?.data || {});
   const unsubs = useRef({});
   const subscribers = useMemo(() => makeSubscribers(user?.uid), [user?.uid]);
+
+  // Wakes the server once per visit: syncs the clock and lets it publish new security rules after a deploy.
+  useEffect(() => {
+    if (!mock) getBillingConfig().catch(() => null);
+  }, [mock]);
 
   useEffect(() => {
     if (mock) return undefined;

@@ -4,6 +4,7 @@
  * This keeps keys out of the code and the git repository.
  */
 import { getFirebaseAdmin } from './otpHelpers.js';
+import { ensureAutoSetup } from './autoSetup.js';
 
 export const RUNTIME_KEYS = [
   'APP_URL',
@@ -32,8 +33,9 @@ export function settingSource(key) {
 export async function loadRuntimeConfig({ force = false } = {}) {
   if (!force && Date.now() - loadedAt < 60000) return;
   loadedAt = Date.now();
+  let admin = null;
   try {
-    const admin = await getFirebaseAdmin();
+    admin = await getFirebaseAdmin();
     const snap = admin ? await admin.db.collection('config').doc('secrets').get() : null;
     const data = snap?.exists ? snap.data() : {};
     RUNTIME_KEYS.forEach((k) => {
@@ -51,6 +53,7 @@ export async function loadRuntimeConfig({ force = false } = {}) {
     console.error('[config] could not load app settings', err.message);
   }
   await discoverPaystackPlans();
+  if (admin) await ensureAutoSetup(admin); // publishes new security rules after a deploy
 }
 
 /*

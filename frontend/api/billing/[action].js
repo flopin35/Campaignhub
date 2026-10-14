@@ -8,6 +8,8 @@
  * One serverless function for all billing actions keeps the Vercel function count low.
  */
 import { loadRuntimeConfig } from '../_lib/runtimeConfig.js';
+import { autoSetupState } from '../_lib/autoSetup.js';
+import { getFirebaseAdmin } from '../_lib/otpHelpers.js';
 import {
   HttpError,
   applyCors,
@@ -60,7 +62,13 @@ export default async function handler(req, res) {
     await loadRuntimeConfig();
     if (action === 'config') {
       res.setHeader('Cache-Control', 'no-store');
-      return sendJson(res, 200, { success: true, data: publicBillingConfig() });
+      // health: yes/no flags only (never key values) so setup problems are visible at a glance
+      const health = {
+        firebaseAdmin: !!(await getFirebaseAdmin().catch(() => null)),
+        ...autoSetupState(),
+        ai: !!(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY),
+      };
+      return sendJson(res, 200, { success: true, data: { ...publicBillingConfig(), health } });
     }
 
     if (req.method !== 'POST') {

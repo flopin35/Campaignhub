@@ -59,54 +59,71 @@ function systemPrompt(campaign, language, tone) {
   ].filter(Boolean).join('\n');
 }
 
-async function callOpenAI(system, user, maxTokens) {
-  const key = process.env.OPENAI_API_KEY;
+const uniq = (list) => [...new Set(list.filter(Boolean))];
+const short = (v) => String(v || '').replace(/\s+/g, ' ').slice(0, 140);
+
+/** OpenAI: tries the configured model, then safe fallbacks. Works with gpt-4o / 4.1 / 5 / o-series. */
+async function callOpenAI(system, user, maxTokens, errors) {
+  const key = (process.env.OPENAI_API_KEY || '').trim();
   if (!key) return null;
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        max_tokens: maxTokens,
-        temperature: 0.75,
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
-    const data = await res.json();
-    if (!res.ok) return null;
-    return data.choices?.[0]?.message?.content?.trim() || null;
-  } catch {
-    return null;
+  for (const model of uniq([process.env.OPENAI_MODEL, 'gpt-4o-mini', 'gpt-4.1-mini'])) {
+    const reasoning = /^(o\d|gpt-5)/.test(model);
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+          // max_completion_tokens works on every current model; max_tokens is rejected by newer ones
+          max_completion_tokens: reasoning ? maxTokens + 4000 : maxTokens,
+          ...(reasoning ? {} : { temperature: 0.75 }),
+        }),
+        signal: AbortSignal.timeout(40000),
+      });
+      const data = await res.json().catch(() => ({}));
+      const text = data.choices?.[0]?.message?.content?.trim();
+      if (res.ok && text) return text;
+      errors.push(`OpenAI ${model}: ${res.status} ${short(data.error?.message || 'empty reply')}`);
+      if (res.status === 401 || res.status === 429) break; // bad key / no credit: other models won't help
+    } catch (err) {
+      errors.push(`OpenAI ${model}: ${short(err.name === 'TimeoutError' ? 'timed out' : err.message)}`);
+    }
   }
+  return null;
 }
 
-async function callGemini(system, user, maxTokens) {
-  const key = process.env.GEMINI_API_KEY;
+/** Gemini: current models first (older 1.5 / 2.0 models are being retired by Google). */
+async function callGemini(system, user, maxTokens, errors) {
+  const key = (process.env.GEMINI_API_KEY || '').trim();
   if (!key) return null;
-  const models = [...new Set([process.env.GEMINI_MODEL || 'gemini-2.0-flash', 'gemini-2.0-flash-lite'])];
+  const models = uniq([process.env.GEMINI_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash-lite', 'gemini-2.0-flash']);
   for (const model of models) {
+    const isFlash25 = /^gemini-2\.5-flash/.test(model);
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents: [{ role: 'user', parts: [{ text: user }] }],
-            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.8 },
-          }),
-          signal: AbortSignal.timeout(45000),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) continue;
-      const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('').trim();
-      if (text) return text;
-    } catch {
-      /* next model */
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: user }] }],
+          generationConfig: {
+            temperature: 0.8,
+            // "thinking" models spend output tokens on reasoning; keep room so the draft is never empty
+            maxOutputTokens: isFlash25 ? maxTokens : maxTokens + 4096,
+            ...(isFlash25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          },
+        }),
+        signal: AbortSignal.timeout(40000),
+      });
+      const data = await res.json().catch(() => ({}));
+      const text = data.candidates?.[0]?.content?.parts?.filter((p) => !p.thought).map((p) => p.text || '').join('').trim();
+      if (res.ok && text) return text;
+      errors.push(`Gemini ${model}: ${res.status} ${short(data.error?.message || data.promptFeedback?.blockReason || data.candidates?.[0]?.finishReason || 'empty reply')}`);
+      if (res.status === 400 && /API key/i.test(data.error?.message || '')) break;
+      if (res.status === 403) break;
+    } catch (err) {
+      errors.push(`Gemini ${model}: ${short(err.name === 'TimeoutError' ? 'timed out' : err.message)}`);
     }
   }
   return null;
@@ -126,6 +143,9 @@ export default async function handler(req, res) {
     const brief = String(body.prompt || '').trim().slice(0, 4000);
     if (brief.length < 5) throw new HttpError(400, 'Tell the AI what you need (a sentence or two is enough).');
 
+    if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+      throw new HttpError(503, 'AI Studio is not switched on yet. The site owner needs to add an OpenAI or Gemini key in Admin → Setup.', 'AI_NOT_CONFIGURED');
+    }
     const admin = await requireAdminSdk();
     const user = await requireUser(req, admin);
     const campaign = await loadOwnedCampaign(admin, body.campaignId, user);
@@ -151,11 +171,17 @@ export default async function handler(req, res) {
     const system = systemPrompt(campaign, language, tone);
     const userMsg = `Task: ${spec.label}\nInstructions: ${spec.guide}\n\nWhat the campaign needs:\n${brief}`;
 
-    const text = (await callOpenAI(system, userMsg, spec.maxTokens))
-      || (await callGemini(system, userMsg, spec.maxTokens));
+    const errors = [];
+    const text = (await callOpenAI(system, userMsg, spec.maxTokens, errors))
+      || (await callGemini(system, userMsg, spec.maxTokens, errors));
 
     if (!text) {
-      throw new HttpError(503, 'The AI writer is busy right now. Please try again in a minute.');
+      console.error('[ai-studio] all AI providers failed:', errors.join(' | '));
+      // Don't charge a failed attempt against the daily allowance.
+      const { FieldValue } = await import('firebase-admin/firestore');
+      await usageRef.set({ count: FieldValue.increment(-1) }, { merge: true }).catch(() => {});
+      const detail = user.isAdmin && errors.length ? ` Details for admin: ${errors.join(' | ').slice(0, 400)}` : '';
+      throw new HttpError(503, `The AI writer could not answer right now. Please try again in a minute.${detail}`);
     }
 
     return sendJson(res, 200, {

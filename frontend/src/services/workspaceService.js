@@ -22,6 +22,24 @@ import {
 import { db } from '../firebase/auth';
 import { toMs } from '../utils/billing';
 import { normalizePhone, isValidPhone, randomToken, shortCode } from '../utils/format';
+import { getBillingConfig } from './billingService';
+
+/**
+ * Right after a deploy the server publishes the new security rules (see api/_lib/autoSetup.js).
+ * If a save lands before that, wake the server and show a clear message instead of
+ * Firebase's "Missing or insufficient permissions".
+ */
+async function guardWrite(fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err?.code !== 'permission-denied') throw err;
+    getBillingConfig({ fresh: true }).catch(() => null);
+    const friendly = new Error('CampaignHub is finishing a security update. Please try again in a minute. If this keeps happening, check that this page’s Pro plan or free trial is active.');
+    friendly.code = 'permission-denied';
+    throw friendly;
+  }
+}
 
 /**
  * Security rules look up the campaign for every document in a batch, and Firestore allows
@@ -116,16 +134,16 @@ export async function addVoter(campaignId, input, { source = 'manual', collected
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  const ref = await addDoc(collection(db, 'supporters'), payload);
+  const ref = await guardWrite(() => addDoc(collection(db, 'supporters'), payload));
   return { id: ref.id, ...payload };
 }
 
 export async function updateVoter(id, input) {
-  await updateDoc(doc(db, 'supporters', id), { ...cleanVoter(input), updatedAt: serverTimestamp() });
+  await guardWrite(() => updateDoc(doc(db, 'supporters', id), { ...cleanVoter(input), updatedAt: serverTimestamp() }));
 }
 
 export async function deleteVoter(id) {
-  await deleteDoc(doc(db, 'supporters', id));
+  await guardWrite(() => deleteDoc(doc(db, 'supporters', id)));
 }
 
 /** Record a contact attempt (door, call, WhatsApp…) and optionally update support level. */
@@ -138,7 +156,7 @@ export async function logVoterContact(voter, { method, supportLevel, note }) {
   };
   if (supportLevel) updates.supportLevel = supportLevel;
   if (note) updates.notes = [voter.notes, `${new Date().toLocaleDateString('en-GH')}: ${note}`].filter(Boolean).join('\n').slice(-1000);
-  await updateDoc(doc(db, 'supporters', voter.id), updates);
+  await guardWrite(() => updateDoc(doc(db, 'supporters', voter.id), updates));
 }
 
 /** Bulk import (CSV). Skips invalid phones and phones already in the list. */
@@ -223,7 +241,7 @@ export async function createAd(campaignId, input) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
-  const ref = await addDoc(collection(db, 'ad_campaigns'), payload);
+  const ref = await guardWrite(() => addDoc(collection(db, 'ad_campaigns'), payload));
   return { id: ref.id, ...payload };
 }
 
@@ -235,11 +253,11 @@ export async function updateAd(id, input) {
   ['budget', 'spent', 'reach'].forEach((k) => {
     if (input[k] !== undefined) patch[k] = Number(input[k]) || 0;
   });
-  await updateDoc(doc(db, 'ad_campaigns', id), patch);
+  await guardWrite(() => updateDoc(doc(db, 'ad_campaigns', id), patch));
 }
 
 export async function deleteAd(id) {
-  await deleteDoc(doc(db, 'ad_campaigns', id));
+  await guardWrite(() => deleteDoc(doc(db, 'ad_campaigns', id)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -264,10 +282,10 @@ export async function saveStation(campaignId, input, id) {
   };
   if (!payload.name) throw new Error('Polling station name is required');
   if (id) {
-    await updateDoc(doc(db, 'polling_stations', id), payload);
+    await guardWrite(() => updateDoc(doc(db, 'polling_stations', id), payload));
     return { id, ...payload };
   }
-  const ref = await addDoc(collection(db, 'polling_stations'), { ...payload, createdAt: serverTimestamp() });
+  const ref = await guardWrite(() => addDoc(collection(db, 'polling_stations'), { ...payload, createdAt: serverTimestamp() }));
   return { id: ref.id, ...payload };
 }
 
@@ -291,7 +309,7 @@ export async function importStations(campaignId, rows) {
 }
 
 export async function deleteStation(id) {
-  await deleteDoc(doc(db, 'polling_stations', id));
+  await guardWrite(() => deleteDoc(doc(db, 'polling_stations', id)));
 }
 
 export function subscribeFieldLinks(campaignId, cb) {
@@ -324,16 +342,16 @@ export async function createFieldLink(campaign, { mode, agentName, agentPhone, s
     submissions: 0,
     createdAt: serverTimestamp(),
   };
-  await setDoc(doc(db, 'field_links', token), payload);
+  await guardWrite(() => setDoc(doc(db, 'field_links', token), payload));
   return { id: token, ...payload };
 }
 
 export async function setFieldLinkActive(token, active) {
-  await updateDoc(doc(db, 'field_links', token), { active: !!active });
+  await guardWrite(() => updateDoc(doc(db, 'field_links', token), { active: !!active }));
 }
 
 export async function deleteFieldLink(token) {
-  await deleteDoc(doc(db, 'field_links', token));
+  await guardWrite(() => deleteDoc(doc(db, 'field_links', token)));
 }
 
 export async function getFieldLink(token) {
@@ -369,7 +387,7 @@ export async function submitResult({ campaignId, token = '', station, votes, rej
 }
 
 export async function deleteResult(id) {
-  await deleteDoc(doc(db, 'election_results', id));
+  await guardWrite(() => deleteDoc(doc(db, 'election_results', id)));
 }
 
 /** Latest submission per station wins (agents can correct mistakes by resubmitting). */
@@ -439,7 +457,7 @@ export async function saveEvent(campaignId, input, id) {
   };
   if (!payload.title || !payload.eventDate) throw new Error('Title and date are required');
   if (id) {
-    await updateDoc(doc(db, 'campaign_events', id), payload);
+    await guardWrite(() => updateDoc(doc(db, 'campaign_events', id), payload));
     return id;
   }
   const ref = await addDoc(collection(db, 'campaign_events'), {
@@ -454,11 +472,11 @@ export async function saveEvent(campaignId, input, id) {
 }
 
 export async function deleteEvent(id) {
-  await deleteDoc(doc(db, 'campaign_events', id));
+  await guardWrite(() => deleteDoc(doc(db, 'campaign_events', id)));
 }
 
 export async function bumpEventCheckIn(id, delta = 1) {
-  await updateDoc(doc(db, 'campaign_events', id), { checkInCount: increment(delta), updatedAt: serverTimestamp() });
+  await guardWrite(() => updateDoc(doc(db, 'campaign_events', id), { checkInCount: increment(delta), updatedAt: serverTimestamp() }));
 }
 
 export async function getPublicEvents(campaignId) {

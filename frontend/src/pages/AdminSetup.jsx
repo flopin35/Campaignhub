@@ -115,7 +115,7 @@ export default function AdminSetup() {
             title="Security rules published"
             action={<Button size="sm" variant="secondary" icon={ShieldCheck} onClick={() => run('rules', () => call('deploy-rules'), 'Security rules are live')} loading={busy === 'rules'}>Publish</Button>}
           >
-            {status.setup.rulesDeployedAt ? `Published ${formatDateTime(status.setup.rulesDeployedAt)}` : 'Protects voter data, payments and uploads.'}
+            {status.setup.rulesDeployedAt ? `Published ${formatDateTime(status.setup.rulesDeployedAt)}` : status.setup.rulesError ? `Firebase said: ${status.setup.rulesError}` : 'Protects voter data, payments and uploads. Published automatically after each deploy.'}
           </Step>
           <Step
             done={!!status.setup.upgradeAppliedAt}
